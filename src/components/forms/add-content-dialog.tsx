@@ -76,20 +76,22 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
       return;
     }
     setIsExtractingInfo(true);
-    let articleTitle = values.url; 
-    let articleSummary = 'Processing...';
-    let sourceName; // Attempt to get source name if possible from URL or extraction
+    
+    let extractedInfo: ExtractArticleInfoOutput = {
+        title: values.url,
+        summary: 'Extracting information...',
+        imageUrl: undefined,
+        dataAiHint: undefined,
+    };
+    let sourceName;
 
     try {
       toast({
         title: "Extracting Information...",
-        description: "AI is fetching title and summary from the URL.",
+        description: "AI is fetching title, summary, and image from the URL.",
       });
-      const extractedInfo: ExtractArticleInfoOutput = await extractArticleInfo({ articleUrl: values.url });
+      extractedInfo = await extractArticleInfo({ articleUrl: values.url });
       
-      articleTitle = extractedInfo.title; 
-      articleSummary = extractedInfo.summary;
-      // Basic source name extraction (can be improved)
       try {
         const urlObject = new URL(values.url);
         sourceName = urlObject.hostname.replace(/^www\./, '');
@@ -97,11 +99,10 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
         sourceName = undefined;
       }
 
-
-      if (extractedInfo.title.toLowerCase().includes("extraction failed") || extractedInfo.summary.toLowerCase().includes("extraction failed")) {
+      if (extractedInfo.title.toLowerCase().includes("extraction failed")) {
           toast({
-              title: "AI Extraction Note",
-              description: "AI had trouble extracting all info. Review the added article.",
+              title: "AI Extraction Issues",
+              description: extractedInfo.summary || "AI had trouble extracting all info. Review the added article.",
               variant: "default", 
           });
       } else {
@@ -112,8 +113,10 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
       }
     } catch (error) {
       console.error("Failed to extract article info:", error);
-      articleTitle = values.url; 
-      articleSummary = "Error extracting content. Please check the URL or try again.";
+      extractedInfo.title = values.url; // Fallback title
+      extractedInfo.summary = "Error extracting content. Please check the URL or try again.";
+      extractedInfo.imageUrl = undefined;
+      extractedInfo.dataAiHint = "extraction error";
       toast({
         title: "AI Extraction Error",
         description: "Could not process the URL due to an error.",
@@ -125,11 +128,12 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
 
     const newArticle: Partial<Article> = {
       url: values.url,
-      title: articleTitle,
-      summary: articleSummary,
+      title: extractedInfo.title,
+      summary: extractedInfo.summary,
       sourceName: sourceName,
       tags: [], 
-      // Let Firestore handle dateAdded and ID
+      imageUrl: extractedInfo.imageUrl || undefined, // Pass along, page.tsx will handle placeholder if still undefined
+      dataAiHint: extractedInfo.dataAiHint || undefined, // Pass along, page.tsx will handle default if still undefined
     };
     onAddArticle(newArticle);
     urlForm.reset();
@@ -142,7 +146,6 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
       return;
     }
     const newRssFeed: Partial<RssFeed> = {
-      // id: Date.now().toString(), // Let DB handle ID if this gets stored
       url: values.rssUrl,
       name: values.name,
       lastFetched: new Date().toISOString(),
