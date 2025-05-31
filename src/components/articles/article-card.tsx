@@ -8,16 +8,17 @@ import { USER_READING_HISTORY } from '@/lib/mock-data';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, ExternalLink, Sparkles, RefreshCw } from 'lucide-react';
+import { BookOpen, ExternalLink, Sparkles, RefreshCw, Trash2 } from 'lucide-react'; // Added Trash2
 import { useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
 
 interface ArticleCardProps {
   article: Article;
   onUpdateArticle: (updatedArticle: Article) => void;
+  onDeleteArticle: (article: Article) => void; // Added onDeleteArticle
 }
 
-export function ArticleCard({ article, onUpdateArticle }: ArticleCardProps) {
+export function ArticleCard({ article, onUpdateArticle, onDeleteArticle }: ArticleCardProps) {
   const [isPredicting, setIsPredicting] = useState(false);
   const { toast } = useToast();
 
@@ -26,8 +27,6 @@ export function ArticleCard({ article, onUpdateArticle }: ArticleCardProps) {
     onUpdateArticle({ ...article, aiRelevance: { ...article.aiRelevance, score: 0, reasoning: '', isLoading: true } });
     try {
       const input: PredictArticleRelevanceInput = {
-        // Use summary for now, or full content if available and short enough.
-        // A real app might fetch full content on demand for AI processing.
         articleContent: article.summary || article.title,
         userReadingHistory: USER_READING_HISTORY,
       };
@@ -48,6 +47,10 @@ export function ArticleCard({ article, onUpdateArticle }: ArticleCardProps) {
     } finally {
       setIsPredicting(false);
     }
+  };
+
+  const handleDeleteClick = () => {
+    onDeleteArticle(article);
   };
 
   const formattedDate = new Date(article.dateAdded).toLocaleDateString('en-US', {
@@ -108,7 +111,7 @@ export function ArticleCard({ article, onUpdateArticle }: ArticleCardProps) {
       </CardContent>
       <CardFooter className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-4 border-t">
         <p className="text-xs text-muted-foreground self-center sm:self-auto">Added: {formattedDate}</p>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-1 flex-wrap"> {/* Adjusted gap for more buttons */}
           <Button variant="ghost" size="sm" asChild>
             <Link href={`/read/${article.id}`}>
               <BookOpen className="mr-2 h-4 w-4" /> Read
@@ -122,6 +125,9 @@ export function ArticleCard({ article, onUpdateArticle }: ArticleCardProps) {
             <a href={article.url} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="mr-2 h-4 w-4" /> Source
             </a>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleDeleteClick} className="text-destructive hover:text-destructive/90 hover:bg-destructive/10">
+            <Trash2 className="mr-2 h-4 w-4" /> Delete
           </Button>
         </div>
       </CardFooter>

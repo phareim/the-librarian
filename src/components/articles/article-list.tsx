@@ -6,9 +6,10 @@ import { ArticleCard } from './article-card';
 interface ArticleListProps {
   articles: Article[];
   onUpdateArticle: (updatedArticle: Article) => void;
+  onDeleteArticle: (article: Article) => void; // Added onDeleteArticle
 }
 
-export function ArticleList({ articles, onUpdateArticle }: ArticleListProps) {
+export function ArticleList({ articles, onUpdateArticle, onDeleteArticle }: ArticleListProps) {
   if (articles.length === 0) {
     return (
       <div className="text-center py-12">
@@ -21,7 +22,12 @@ export function ArticleList({ articles, onUpdateArticle }: ArticleListProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4 md:p-6">
       {articles.map(article => (
-        <ArticleCard key={article.id} article={article} onUpdateArticle={onUpdateArticle} />
+        <ArticleCard 
+          key={article.id} 
+          article={article} 
+          onUpdateArticle={onUpdateArticle}
+          onDeleteArticle={onDeleteArticle} // Pass down
+        />
       ))}
     </div>
   );
