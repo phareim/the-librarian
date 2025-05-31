@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -12,9 +13,9 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'placehold.co',
+        hostname: '**', // Allows any hostname
         port: '',
-        pathname: '/**',
+        pathname: '**', // Allows any path
       },
     ],
   },
