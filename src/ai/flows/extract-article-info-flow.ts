@@ -19,7 +19,7 @@ export type ExtractArticleInfoInput = z.infer<typeof ExtractArticleInfoInputSche
 const ExtractArticleInfoOutputSchema = z.object({
   title: z.string().describe('The extracted title of the article. If extraction fails, this should indicate failure (e.g., "Extraction Failed: URL Inaccessible").'),
   summary: z.string().describe('A concise summary of the article content. If extraction fails, this should explain the issue (e.g., "Could not access or process the content at the provided URL.").'),
-  imageUrl: z.string().url().nullable().optional().describe('The full URL of the most relevant image from the article. Returns null or is omitted if no suitable image is found or if extraction fails.'),
+  imageUrl: z.string().nullable().optional().describe('The full URL of the most relevant image from the article. Returns null or is omitted if no suitable image is found or if extraction fails.'),
   dataAiHint: z.string().max(50).nullable().optional().describe('One or two keywords describing the image or article content (e.g., "technology abstract", "mountain landscape"). Used for placeholder image services. If extraction fails, use a generic hint like "content error". Maximum 50 characters.'),
 });
 export type ExtractArticleInfoOutput = z.infer<typeof ExtractArticleInfoOutputSchema>;
@@ -77,8 +77,7 @@ const extractArticleInfoFlow = ai.defineFlow(
         finalOutput.imageUrl = null;
     } else if (typeof rawOutput.imageUrl === 'string' && rawOutput.imageUrl.trim() !== '') {
         try {
-            // Validate if it's a URL structure. z.string().url() in the prompt's output schema
-            // guides the LLM, but this is a fallback check.
+            // Validate if it's a URL structure.
             new URL(rawOutput.imageUrl);
             finalOutput.imageUrl = rawOutput.imageUrl;
         } catch (e) {
@@ -92,12 +91,10 @@ const extractArticleInfoFlow = ai.defineFlow(
 
     // Process dataAiHint
     if (rawOutput.dataAiHint === null) {
-        // If AI explicitly returns null, respect it for now, default logic below will handle it
         finalOutput.dataAiHint = null;
     } else if (typeof rawOutput.dataAiHint === 'string' && rawOutput.dataAiHint.trim() !== '') {
         finalOutput.dataAiHint = rawOutput.dataAiHint.substring(0, 50);
     } else {
-        // If dataAiHint is undefined or an empty string
         finalOutput.dataAiHint = undefined; 
     }
     
@@ -126,3 +123,4 @@ const extractArticleInfoFlow = ai.defineFlow(
     return finalOutput;
   }
 );
+
