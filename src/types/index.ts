@@ -4,11 +4,6 @@ export interface Tag {
   name: string;
 }
 
-export interface Category {
-  id: string;
-  name: string;
-}
-
 export interface Article {
   id: string;
   title: string;
@@ -18,7 +13,6 @@ export interface Article {
   summary?: string; // Short summary for card view
   imageUrl?: string;
   tags: Tag[];
-  category?: Category;
   dateAdded: string; // ISO string
   aiRelevance?: {
     score: number;
@@ -26,6 +20,7 @@ export interface Article {
     isLoading?: boolean;
   };
   isRead?: boolean;
+  dataAiHint?: string; // Added based on usage in page.tsx
 }
 
 export interface RssFeed {
@@ -34,3 +29,4 @@ export interface RssFeed {
   name: string;
   lastFetched?: string; // ISO string
 }
+

@@ -40,8 +40,8 @@ export default function LibraryPage() {
       summary: newArticleData.summary || 'No summary available.',
       imageUrl: newArticleData.imageUrl || 'https://placehold.co/600x400.png',
       dataAiHint: newArticleData.dataAiHint || 'general content',
-      ...newArticleData,
-    };
+      ...newArticleData, // Spread the rest of newArticleData, ensuring type compatibility
+    } as Article; // Assert as Article to satisfy type checker after removing category
     setArticles(prevArticles => [completeArticle, ...prevArticles]);
     toast({
       title: "Article Added",

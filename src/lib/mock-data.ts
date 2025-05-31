@@ -1,12 +1,4 @@
-import type { Article, Category, Tag } from '@/types';
-
-export const MOCK_CATEGORIES: Category[] = [
-  { id: 'tech', name: 'Technology' },
-  { id: 'ai', name: 'Artificial Intelligence' },
-  { id: 'productivity', name: 'Productivity' },
-  { id: 'design', name: 'Design' },
-  { id: 'science', name: 'Science' },
-];
+import type { Article, Tag } from '@/types';
 
 export const MOCK_TAGS: Tag[] = [
   { id: 'webdev', name: 'Web Development' },
@@ -48,7 +40,6 @@ Stay tuned for more updates as Next.js 15 rolls out!
     imageUrl: 'https://placehold.co/600x400.png',
     dataAiHint: 'technology coding',
     tags: [MOCK_TAGS[0], MOCK_TAGS[2]],
-    category: MOCK_CATEGORIES[0],
     dateAdded: new Date(2023, 10, 15).toISOString(),
     isRead: false,
   },
@@ -86,7 +77,6 @@ The field is rapidly evolving, and understanding these models is key to harnessi
     imageUrl: 'https://placehold.co/600x400.png',
     dataAiHint: 'artificial intelligence',
     tags: [MOCK_TAGS[1]],
-    category: MOCK_CATEGORIES[1],
     dateAdded: new Date(2023, 11, 1).toISOString(),
     isRead: true,
   },
@@ -118,7 +108,6 @@ By implementing these strategies, you can significantly enhance your focus and a
     imageUrl: 'https://placehold.co/600x400.png',
     dataAiHint: 'office work',
     tags: [MOCK_TAGS[4]],
-    category: MOCK_CATEGORIES[2],
     dateAdded: new Date(2024, 0, 5).toISOString(),
     isRead: false,
   },

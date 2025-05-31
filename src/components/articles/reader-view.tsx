@@ -46,9 +46,6 @@ export function ReaderView({ article }: ReaderViewProps) {
           {article.sourceName && <span>From: <a href={article.url} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">{article.sourceName} <ExternalLink className="inline h-3 w-3 ml-0.5"/></a></span>}
           <span className="flex items-center"><CalendarDays className="mr-1.5 h-4 w-4" /> Added: {formattedDate}</span>
         </div>
-        {article.category && (
-          <Badge variant="outline" className="mr-2 my-1 border-primary/50 text-primary/80">{article.category.name}</Badge>
-        )}
         {article.tags.map(tag => (
           <Badge key={tag.id} variant="secondary" className="mr-2 my-1">
             <TagIcon className="mr-1 h-3 w-3" />{tag.name}

@@ -29,16 +29,13 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-// Removed Textarea, TagInput, Select components as they are no longer used for URL form
 import type { Article, RssFeed } from '@/types';
-// Removed MOCK_CATEGORIES, Tag, Category types as they are no longer used for URL form
 import { extractArticleInfo, type ExtractArticleInfoOutput } from '@/ai/flows/extract-article-info-flow';
 import { useToast } from "@/hooks/use-toast";
 import { RefreshCw } from 'lucide-react';
 
 const urlFormSchema = z.object({
   url: z.string().url({ message: "Please enter a valid URL." }),
-  // Title, summary, tags, categoryId are removed from schema
 });
 
 const rssFormSchema = z.object({
@@ -61,7 +58,6 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
     resolver: zodResolver(urlFormSchema),
     defaultValues: {
       url: '',
-      // Removed other default values
     },
   });
 
@@ -75,8 +71,8 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
 
   const handleAddUrl = async (values: z.infer<typeof urlFormSchema>) => {
     setIsExtractingInfo(true);
-    let articleTitle = values.url; // Fallback title
-    let articleSummary = 'Processing...'; // Fallback summary
+    let articleTitle = values.url; 
+    let articleSummary = 'Processing...'; 
 
     try {
       toast({
@@ -85,8 +81,8 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
       });
       const extractedInfo: ExtractArticleInfoOutput = await extractArticleInfo({ articleUrl: values.url });
       
-      articleTitle = extractedInfo.title; // Use directly, flow handles failure messages
-      articleSummary = extractedInfo.summary; // Use directly
+      articleTitle = extractedInfo.title; 
+      articleSummary = extractedInfo.summary;
 
       if (extractedInfo.title.toLowerCase().includes("extraction failed") || extractedInfo.summary.toLowerCase().includes("extraction failed")) {
           toast({
@@ -102,7 +98,7 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
       }
     } catch (error) {
       console.error("Failed to extract article info:", error);
-      articleTitle = values.url; // Revert to URL if API call itself fails
+      articleTitle = values.url; 
       articleSummary = "Error extracting content. Please check the URL or try again.";
       toast({
         title: "AI Extraction Error",
@@ -117,9 +113,7 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
       url: values.url,
       title: articleTitle,
       summary: articleSummary,
-      tags: [], // Tags are no longer collected in this dialog
-      category: undefined, // Category is no longer collected
-      // id, dateAdded, imageUrl, dataAiHint will be defaulted by the parent component (page.tsx)
+      tags: [], 
     };
     onAddArticle(newArticle);
     urlForm.reset();
@@ -174,7 +168,6 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
                     </FormItem>
                   )}
                 />
-                {/* Removed FormFields for title, summary, tags, categoryId */}
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                   <Button type="submit" disabled={isExtractingInfo}>
@@ -232,4 +225,3 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
     </Dialog>
   );
 }
-

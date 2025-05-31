@@ -8,14 +8,14 @@ import { USER_READING_HISTORY } from '@/lib/mock-data';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, ExternalLink, Sparkles, RefreshCw, Trash2 } from 'lucide-react'; // Added Trash2
+import { BookOpen, ExternalLink, Sparkles, RefreshCw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
 
 interface ArticleCardProps {
   article: Article;
   onUpdateArticle: (updatedArticle: Article) => void;
-  onDeleteArticle: (article: Article) => void; // Added onDeleteArticle
+  onDeleteArticle: (article: Article) => void;
 }
 
 export function ArticleCard({ article, onUpdateArticle, onDeleteArticle }: ArticleCardProps) {
@@ -101,9 +101,6 @@ export function ArticleCard({ article, onUpdateArticle, onDeleteArticle }: Artic
         )}
 
         <div className="flex flex-wrap gap-2 mb-2">
-          {article.category && (
-            <Badge variant="outline" className="border-primary/50 text-primary/80">{article.category.name}</Badge>
-          )}
           {article.tags.map((tag: Tag) => (
             <Badge key={tag.id} variant="secondary">{tag.name}</Badge>
           ))}
@@ -111,7 +108,7 @@ export function ArticleCard({ article, onUpdateArticle, onDeleteArticle }: Artic
       </CardContent>
       <CardFooter className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-4 border-t">
         <p className="text-xs text-muted-foreground self-center sm:self-auto">Added: {formattedDate}</p>
-        <div className="flex gap-1 flex-wrap"> {/* Adjusted gap for more buttons */}
+        <div className="flex gap-1 flex-wrap">
           <Button variant="ghost" size="sm" asChild>
             <Link href={`/read/${article.id}`}>
               <BookOpen className="mr-2 h-4 w-4" /> Read
