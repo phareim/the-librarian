@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -38,7 +39,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Article, Category, RssFeed, Tag } from '@/types';
-import { MOCK_CATEGORIES } from '@/lib/mock-data'; // Assuming mock categories are available
+import { MOCK_CATEGORIES } from '@/lib/mock-data';
+import { extractArticleInfo, type ExtractArticleInfoOutput } from '@/ai/flows/extract-article-info-flow';
+import { useToast } from "@/hooks/use-toast";
+import { RefreshCw } from 'lucide-react';
 
 const urlFormSchema = z.object({
   url: z.string().url({ message: "Please enter a valid URL." }),
@@ -61,6 +65,9 @@ interface AddContentDialogProps {
 }
 
 export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssFeed }: AddContentDialogProps) {
+  const [isExtractingInfo, setIsExtractingInfo] = useState(false);
+  const { toast } = useToast();
+
   const urlForm = useForm<z.infer<typeof urlFormSchema>>({
     resolver: zodResolver(urlFormSchema),
     defaultValues: {
@@ -79,16 +86,61 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
     },
   });
 
-  const handleAddUrl = (values: z.infer<typeof urlFormSchema>) => {
+  const handleAddUrl = async (values: z.infer<typeof urlFormSchema>) => {
+    setIsExtractingInfo(true);
+    let finalTitle = values.title;
+    let finalSummary = values.summary;
+
+    try {
+      toast({
+        title: "Extracting Information...",
+        description: "The AI is trying to fetch title and summary from the URL.",
+      });
+      const extractedInfo: ExtractArticleInfoOutput = await extractArticleInfo({ articleUrl: values.url });
+      
+      if (extractedInfo) {
+        if (!finalTitle && extractedInfo.title && !extractedInfo.title.toLowerCase().includes("extraction failed")) {
+          finalTitle = extractedInfo.title;
+          urlForm.setValue('title', extractedInfo.title); // Update form for user visibility
+        }
+        if (!finalSummary && extractedInfo.summary && !extractedInfo.summary.toLowerCase().includes("extraction failed")) {
+          finalSummary = extractedInfo.summary;
+           urlForm.setValue('summary', extractedInfo.summary); // Update form for user visibility
+        }
+
+        if (extractedInfo.title.toLowerCase().includes("extraction failed")) {
+            toast({
+                title: "AI Extraction Issue",
+                description: extractedInfo.summary || "Could not fully extract information. Please review.",
+                variant: "destructive",
+            });
+        } else {
+             toast({
+                title: "Information Extracted",
+                description: "Title and summary have been populated. You can edit them if needed.",
+            });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to extract article info:", error);
+      toast({
+        title: "AI Extraction Error",
+        description: "Could not automatically extract title/summary. Please enter them manually.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExtractingInfo(false);
+    }
+
     const newArticle: Partial<Article> = {
       id: Date.now().toString(),
       url: values.url,
-      title: values.title || values.url, // Fallback title
-      summary: values.summary,
+      title: finalTitle || values.url, 
+      summary: finalSummary,
       tags: values.tags || [],
       category: values.categoryId ? MOCK_CATEGORIES.find(c => c.id === values.categoryId) : undefined,
       dateAdded: new Date().toISOString(),
-      imageUrl: 'https://placehold.co/600x400.png', // Placeholder image
+      imageUrl: 'https://placehold.co/600x400.png',
       dataAiHint: 'general web content',
     };
     onAddArticle(newArticle);
@@ -109,7 +161,13 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) {
+        urlForm.reset();
+        rssForm.reset();
+      }
+      onOpenChange(open);
+    }}>
       <DialogContent className="sm:max-w-[525px]">
         <DialogHeader>
           <DialogTitle className="font-headline">Add New Content</DialogTitle>
@@ -143,7 +201,7 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
                   name="title"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Title (Optional)</FormLabel>
+                      <FormLabel>Title (Optional, AI will try to extract)</FormLabel>
                       <FormControl>
                         <Input placeholder="Custom title for the article" {...field} />
                       </FormControl>
@@ -155,7 +213,7 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
                   name="summary"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Summary (Optional)</FormLabel>
+                      <FormLabel>Summary (Optional, AI will try to extract)</FormLabel>
                       <FormControl>
                         <Textarea placeholder="A brief summary of the article" {...field} />
                       </FormControl>
@@ -203,7 +261,16 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
                 />
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                  <Button type="submit">Add Article</Button>
+                  <Button type="submit" disabled={isExtractingInfo}>
+                    {isExtractingInfo ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Extracting & Adding...
+                      </>
+                    ) : (
+                      'Add Article'
+                    )}
+                  </Button>
                 </DialogFooter>
               </form>
             </Form>
