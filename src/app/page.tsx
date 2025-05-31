@@ -44,10 +44,10 @@ export default function LibraryPage() {
 
   useEffect(() => {
     if (!db || !user) {
-      setArticles([]);
+      setArticles([]); // Clear articles if no user or no DB
       setIsLoadingArticles(false);
       if (!authLoading && !user) {
-         // Optionally, inform user to log in if not loading and no user
+         // User is not logged in and auth is not loading
       }
       return;
     }
@@ -59,13 +59,11 @@ export default function LibraryPage() {
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const fetchedArticles = querySnapshot.docs.map(doc => {
         const data = doc.data();
-        // Convert Firestore Timestamp to ISO string for client-side consistency
         const dateAdded = data.dateAdded instanceof Timestamp ? data.dateAdded.toDate().toISOString() : data.dateAdded as string;
         return {
           ...data,
           id: doc.id,
           dateAdded,
-          // Ensure aiRelevance.isLoading is not persisted or handled appropriately
           aiRelevance: data.aiRelevance ? { ...data.aiRelevance, isLoading: false } : undefined,
         } as Article;
       });
@@ -85,40 +83,62 @@ export default function LibraryPage() {
   }, [user, authLoading, toast]);
 
   const handleAddArticle = useCallback(async (newArticleData: Partial<Article>) => {
-    if (!db || !user) {
-      toast({ title: "Error", description: "You must be logged in to add articles.", variant: "destructive" });
+    if (!user) { // Workaround: If no user, add locally for this session
+      const localArticle: Article = {
+        id: `local-${Date.now().toString()}`,
+        userId: 'local-session-user', // Placeholder, not saved to DB
+        title: newArticleData.title || 'Untitled Article',
+        url: newArticleData.url || '',
+        summary: newArticleData.summary || 'No summary available.',
+        imageUrl: newArticleData.imageUrl || 'https://placehold.co/600x400.png',
+        dataAiHint: newArticleData.dataAiHint || 'general content',
+        tags: newArticleData.tags || [],
+        dateAdded: new Date().toISOString(),
+        isRead: false,
+        sourceName: newArticleData.sourceName,
+        content: newArticleData.content,
+        aiRelevance: newArticleData.aiRelevance ? { ...newArticleData.aiRelevance, isLoading: false } : undefined,
+      };
+      setArticles(prevArticles => [localArticle, ...prevArticles]);
+      toast({
+        title: "Article Added Locally",
+        description: `"${localArticle.title}" has been added to your current session. Login to save permanently.`,
+      });
       return;
     }
 
-    const articleToSave = {
-      ...newArticleData, // Contains title, summary, url from AI extraction
+    if (!db) {
+        toast({ title: "Database Error", description: "Database not available. Cannot save article.", variant: "destructive" });
+        return;
+    }
+
+    // Original Firestore logic if user AND db are available
+    const articleToSave: Omit<Article, 'id' | 'dateAdded'> & { dateAdded: any } = {
       userId: user.uid,
+      title: newArticleData.title || 'Untitled Article',
+      url: newArticleData.url!,
+      summary: newArticleData.summary || 'No summary available.',
       tags: newArticleData.tags || [],
-      dateAdded: serverTimestamp(), // Firestore will set this
+      dateAdded: serverTimestamp(), 
       isRead: false,
       imageUrl: newArticleData.imageUrl || 'https://placehold.co/600x400.png',
       dataAiHint: newArticleData.dataAiHint || 'general content',
-      sourceName: newArticleData.sourceName, // Ensure this is passed if available
+      sourceName: newArticleData.sourceName,
       content: newArticleData.content, // Ensure this is passed if available
+      aiRelevance: newArticleData.aiRelevance ? { score: newArticleData.aiRelevance.score, reasoning: newArticleData.aiRelevance.reasoning } : undefined,
     };
     
-    // Remove id if it was part of newArticleData to let Firestore generate it
-    // The `id` field in `articleToSave` should not exist for `addDoc`
-    const { id, ...dataToSaveWithoutId } = articleToSave as any;
-
-
     try {
-      const docRef = await addDoc(collection(db, 'articles'), dataToSaveWithoutId);
+      await addDoc(collection(db, 'articles'), articleToSave);
       toast({
         title: "Article Added",
-        description: `"${newArticleData.title || 'Article'}" has been added to your library.`,
+        description: `"${articleToSave.title}" has been added to your library.`,
       });
-      // No need to manually add to local state if onSnapshot is working correctly
     } catch (error) {
       console.error("Error adding article: ", error);
-      toast({ title: "Error", description: "Could not add article.", variant: "destructive" });
+      toast({ title: "Error", description: "Could not add article to your library.", variant: "destructive" });
     }
-  }, [user, toast]);
+  }, [user, db, toast]);
 
 
   const handleAddRssFeed = (newFeed: Partial<RssFeed>) => {
@@ -137,41 +157,57 @@ export default function LibraryPage() {
   };
 
   const handleUpdateArticle = useCallback(async (updatedArticle: Article) => {
-    if (!db || !user || !updatedArticle.id) {
+    if (!db || !user || !updatedArticle.id || updatedArticle.id.startsWith('local-')) {
+      if (updatedArticle.id.startsWith('local-')) { // Handle local update
+         setArticles(prevArticles => prevArticles.map(a => a.id === updatedArticle.id ? updatedArticle : a));
+         // toast({ title: "Local Article Updated", description: `"${updatedArticle.title}" has been updated in this session.` });
+         return;
+      }
       toast({ title: "Error", description: "Could not update article. User or article ID missing.", variant: "destructive" });
       return;
     }
     
     const articleRef = doc(db, 'articles', updatedArticle.id);
-    // Prepare data for Firestore, ensuring not to save UI-specific state like `isLoading`
     const { isLoading, ...aiRelevanceToSave } = updatedArticle.aiRelevance || {};
     const dataToUpdate = {
         ...updatedArticle,
-        aiRelevance: updatedArticle.aiRelevance ? aiRelevanceToSave : null, // Store null if no relevance
-        dateAdded: updatedArticle.dateAdded instanceof Timestamp ? updatedArticle.dateAdded : new Date(updatedArticle.dateAdded as string) // Ensure it's a Date or Timestamp
+        aiRelevance: updatedArticle.aiRelevance ? aiRelevanceToSave : null, 
+        dateAdded: updatedArticle.dateAdded instanceof Timestamp ? updatedArticle.dateAdded : new Date(updatedArticle.dateAdded as string) 
     };
-    // Firestore expects simple objects, remove id from the data payload for update.
     delete (dataToUpdate as any).id;
-
 
     try {
       await updateDoc(articleRef, dataToUpdate);
       // Optimistic update handled by onSnapshot
-      // toast({ title: "Article Updated", description: `"${updatedArticle.title}" has been updated.` });
     } catch (error) {
       console.error("Error updating article: ", error);
       toast({ title: "Error", description: "Could not update article.", variant: "destructive" });
     }
-  }, [user, toast]);
+  }, [user, db, toast]);
 
   const handleInitiateDeleteArticle = (article: Article) => {
     setArticleToDelete(article);
   };
 
   const handleConfirmDeleteArticle = async () => {
-    if (!db || !user || !articleToDelete || !articleToDelete.id) {
-       toast({ title: "Error", description: "Could not delete article. User or article ID missing.", variant: "destructive" });
+    if (!articleToDelete || !articleToDelete.id) {
+       toast({ title: "Error", description: "Could not delete article. Article ID missing.", variant: "destructive" });
       return;
+    }
+
+    if (articleToDelete.id.startsWith('local-')) { // Handle local delete
+        setArticles(prev => prev.filter(a => a.id !== articleToDelete.id));
+        toast({
+            title: "Local Article Deleted",
+            description: `"${articleToDelete.title}" has been removed from this session.`,
+        });
+        setArticleToDelete(null);
+        return;
+    }
+
+    if (!db || !user) {
+         toast({ title: "Error", description: "Could not delete article. User or database not available.", variant: "destructive" });
+        return;
     }
     
     const articleRef = doc(db, 'articles', articleToDelete.id);
@@ -182,7 +218,6 @@ export default function LibraryPage() {
         description: `"${articleToDelete.title}" has been removed from your library.`,
       });
       setArticleToDelete(null);
-      // Optimistic update handled by onSnapshot
     } catch (error) {
       console.error("Error deleting article: ", error);
       toast({ title: "Error", description: "Could not delete article.", variant: "destructive" });
@@ -190,7 +225,7 @@ export default function LibraryPage() {
     }
   };
 
-  const displayArticles = user ? articles : [];
+  const displayArticles = articles; // Always display from local state, which is updated by Firebase or local actions
 
   return (
     <main className="flex flex-1 flex-col">
@@ -198,10 +233,10 @@ export default function LibraryPage() {
       <div className="flex-1 overflow-auto">
         {authLoading || (isLoadingArticles && user) ? (
           <div className="text-center py-12 text-muted-foreground">Loading articles...</div>
-        ) : !user ? (
+        ) : !user && !authLoading && displayArticles.length === 0 ? ( // Only show "Please log in" if also no local articles
           <div className="text-center py-12">
             <h2 className="text-2xl font-headline mb-2">Welcome to Your Personal Archive</h2>
-            <p className="text-muted-foreground">Please log in to manage and view your articles.</p>
+            <p className="text-muted-foreground">Please log in to manage and view your articles, or add content to view it in this session.</p>
           </div>
         ) : displayArticles.length === 0 && !isLoadingArticles ? (
           <div className="text-center py-12">
@@ -221,7 +256,7 @@ export default function LibraryPage() {
         onOpenChange={setIsAddContentDialogOpen}
         onAddArticle={handleAddArticle}
         onAddRssFeed={handleAddRssFeed}
-        isUserLoggedIn={!!user}
+        isUserLoggedIn={!!user} // Still pass this for dialog's internal descriptive text
       />
       {articleToDelete && (
         <AlertDialog open={!!articleToDelete} onOpenChange={() => setArticleToDelete(null)}>
