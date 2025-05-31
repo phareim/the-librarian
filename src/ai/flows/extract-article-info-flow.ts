@@ -52,10 +52,11 @@ const extractArticleInfoFlow = ai.defineFlow(
     inputSchema: ExtractArticleInfoInputSchema,
     outputSchema: ExtractArticleInfoOutputSchema,
   },
-  async (input) => {
-    const {output} = await extractArticleInfoPrompt(input);
-    if (!output) {
-        // This case implies a more fundamental issue with the LLM call or output parsing.
+  async (input): Promise<ExtractArticleInfoOutput> => {
+    const llmResponse = await extractArticleInfoPrompt(input);
+    const rawOutput = llmResponse.output;
+
+    if (!rawOutput) {
         return {
             title: "Extraction Failed: Model Error",
             summary: "The AI model encountered an error and could not process the URL.",
@@ -63,20 +64,65 @@ const extractArticleInfoFlow = ai.defineFlow(
             dataAiHint: "model error",
         };
     }
-    // Ensure the output conforms, especially for optional fields if the model omits them.
-    // Zod's schema parsing should handle this based on `optional()` and `nullable()`.
-    // If title indicates failure, ensure dataAiHint is generic if not already set by AI for failure.
-    if (output.title.toLowerCase().includes("extraction failed") && !output.dataAiHint) {
-        return {
-            ...output,
-            imageUrl: output.imageUrl === undefined ? null : output.imageUrl, // ensure null if undefined
-            dataAiHint: "extraction error",
-        };
-    }
-    return {
-        ...output,
-        imageUrl: output.imageUrl === undefined ? null : output.imageUrl, // ensure null if undefined
-        dataAiHint: output.dataAiHint === undefined ? (output.title.toLowerCase().includes("extraction failed") ? "extraction error" : "web content") : output.dataAiHint,
+
+    const finalOutput: ExtractArticleInfoOutput = {
+        title: rawOutput.title,
+        summary: rawOutput.summary,
+        imageUrl: undefined, 
+        dataAiHint: undefined,
     };
+
+    // Process imageUrl
+    if (rawOutput.imageUrl === null) {
+        finalOutput.imageUrl = null;
+    } else if (typeof rawOutput.imageUrl === 'string' && rawOutput.imageUrl.trim() !== '') {
+        try {
+            // Validate if it's a URL structure. z.string().url() in the prompt's output schema
+            // guides the LLM, but this is a fallback check.
+            new URL(rawOutput.imageUrl);
+            finalOutput.imageUrl = rawOutput.imageUrl;
+        } catch (e) {
+            // If AI returns a string that's not a valid URL, treat as no image found.
+            finalOutput.imageUrl = null;
+        }
+    } else {
+        // If imageUrl is undefined or an empty string from rawOutput
+        finalOutput.imageUrl = null;
+    }
+
+    // Process dataAiHint
+    if (rawOutput.dataAiHint === null) {
+        // If AI explicitly returns null, respect it for now, default logic below will handle it
+        finalOutput.dataAiHint = null;
+    } else if (typeof rawOutput.dataAiHint === 'string' && rawOutput.dataAiHint.trim() !== '') {
+        finalOutput.dataAiHint = rawOutput.dataAiHint.substring(0, 50);
+    } else {
+        // If dataAiHint is undefined or an empty string
+        finalOutput.dataAiHint = undefined; 
+    }
+    
+    const titleIndicatesFailure = finalOutput.title.toLowerCase().includes("extraction failed");
+
+    // Set default for dataAiHint if it's still undefined or null
+    if (finalOutput.dataAiHint === undefined || finalOutput.dataAiHint === null) {
+        finalOutput.dataAiHint = titleIndicatesFailure ? "extraction error" : "web content";
+    }
+
+    // If title indicates failure and imageUrl wasn't explicitly set to null by AI, make it null.
+    if (titleIndicatesFailure && finalOutput.imageUrl === undefined) {
+        finalOutput.imageUrl = null;
+    }
+    
+    // Ensure imageUrl is null if it ended up undefined (and not a failure case that already set it to null)
+    if (finalOutput.imageUrl === undefined) {
+        finalOutput.imageUrl = null;
+    }
+    
+    // Ensure dataAiHint is a string (it should be by now)
+    if (finalOutput.dataAiHint === undefined || finalOutput.dataAiHint === null) {
+         finalOutput.dataAiHint = "general content"; // Ultimate fallback
+    }
+
+    return finalOutput;
   }
 );
