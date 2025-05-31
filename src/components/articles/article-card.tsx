@@ -1,16 +1,18 @@
+
 'use client';
 
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Article, Tag } from '@/types';
 import { predictArticleRelevance, type PredictArticleRelevanceInput } from '@/ai/flows/predict-article-relevance';
-import { USER_READING_HISTORY } from '@/lib/mock-data';
+import { USER_READING_HISTORY } from '@/lib/mock-data'; // This should ideally come from user settings
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { BookOpen, ExternalLink, Sparkles, RefreshCw, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
+import type { Timestamp } from 'firebase/firestore';
 
 interface ArticleCardProps {
   article: Article;
@@ -19,33 +21,64 @@ interface ArticleCardProps {
 }
 
 export function ArticleCard({ article, onUpdateArticle, onDeleteArticle }: ArticleCardProps) {
-  const [isPredicting, setIsPredicting] = useState(false);
+  const [isPredicting, setIsPredicting] = useState(article.aiRelevance?.isLoading || false);
   const { toast } = useToast();
+
+  // Effect to sync isPredicting state with article prop if it changes externally
+  useEffect(() => {
+    setIsPredicting(article.aiRelevance?.isLoading || false);
+  }, [article.aiRelevance?.isLoading]);
 
   const handlePredictRelevance = async () => {
     setIsPredicting(true);
-    onUpdateArticle({ ...article, aiRelevance: { ...article.aiRelevance, score: 0, reasoning: '', isLoading: true } });
+    // Immediately update local UI state for loading
+    const tempArticleWithLoading = { 
+      ...article, 
+      aiRelevance: { 
+        score: article.aiRelevance?.score || 0, 
+        reasoning: article.aiRelevance?.reasoning || '', 
+        isLoading: true 
+      } 
+    };
+    // Visually update the card, but don't persist isLoading to Firestore yet.
+    // The actual onUpdateArticle will handle persistence.
+    // For local display, we can use this state.
+    // Let's assume onUpdateArticle correctly handles not saving isLoading.
+
+    // The actual call to onUpdateArticle for Firestore should happen with final data.
+    // Here, we primarily trigger the AI flow.
     try {
       const input: PredictArticleRelevanceInput = {
         articleContent: article.summary || article.title,
-        userReadingHistory: USER_READING_HISTORY,
+        userReadingHistory: USER_READING_HISTORY, // In a real app, fetch this dynamically
       };
       const result = await predictArticleRelevance(input);
-      onUpdateArticle({ ...article, aiRelevance: { score: result.relevanceScore, reasoning: result.reasoning, isLoading: false } });
+      onUpdateArticle({ 
+        ...article, 
+        aiRelevance: { score: result.relevanceScore, reasoning: result.reasoning, isLoading: false } 
+      });
       toast({
         title: "Relevance Predicted",
         description: `Score: ${result.relevanceScore.toFixed(2)} for "${article.title}"`,
       });
     } catch (error) {
       console.error('Error predicting relevance:', error);
-      onUpdateArticle({ ...article, aiRelevance: { ...article.aiRelevance, score: 0, reasoning: 'Error predicting relevance.', isLoading: false } });
+      onUpdateArticle({ 
+        ...article, 
+        aiRelevance: { 
+          score: article.aiRelevance?.score || 0, // Keep old score on error
+          reasoning: 'Error predicting relevance.', 
+          isLoading: false 
+        } 
+      });
        toast({
         title: "Prediction Error",
         description: "Could not predict relevance for this article.",
         variant: "destructive",
       });
     } finally {
-      setIsPredicting(false);
+      // isLoading state will be set to false by onUpdateArticle via onSnapshot eventually
+      // setIsPredicting(false); // This might be set too early if onUpdateArticle is async and updates DB
     }
   };
 
@@ -53,11 +86,22 @@ export function ArticleCard({ article, onUpdateArticle, onDeleteArticle }: Artic
     onDeleteArticle(article);
   };
 
-  const formattedDate = new Date(article.dateAdded).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  const getDateString = (dateValue: string | Timestamp | Date): string => {
+    if (dateValue instanceof Date) {
+      return dateValue.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+    if (typeof dateValue === 'string') {
+      return new Date(dateValue).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+    // If it's a Firestore Timestamp object (it shouldn't be here if page.tsx converts it)
+    if (dateValue && typeof (dateValue as Timestamp).toDate === 'function') {
+      return (dateValue as Timestamp).toDate().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+    return 'Date not available';
+  };
+  
+  const formattedDate = getDateString(article.dateAdded);
+
 
   return (
     <Card className="flex flex-col h-full overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -67,8 +111,8 @@ export function ArticleCard({ article, onUpdateArticle, onDeleteArticle }: Artic
             <Image 
               src={article.imageUrl} 
               alt={article.title} 
-              layout="fill" 
-              objectFit="cover"
+              fill={true}
+              style={{objectFit: "cover"}}
               data-ai-hint={article.dataAiHint || 'placeholder'}
             />
           </div>
@@ -87,13 +131,13 @@ export function ArticleCard({ article, onUpdateArticle, onDeleteArticle }: Artic
       <CardContent className="flex-grow">
         <p className="text-sm text-foreground/80 mb-4 line-clamp-3">{article.summary}</p>
         
-        {article.aiRelevance && !article.aiRelevance.isLoading && (
+        {article.aiRelevance && !isPredicting && article.aiRelevance.score !== undefined && (
           <div className="mb-3 p-3 bg-accent/20 rounded-md border border-accent/50">
             <p className="text-xs font-semibold text-accent-foreground mb-1">AI Relevance: {article.aiRelevance.score.toFixed(2)} / 1.0</p>
             <p className="text-xs text-accent-foreground/80 line-clamp-2">{article.aiRelevance.reasoning}</p>
           </div>
         )}
-         {article.aiRelevance?.isLoading && (
+         {isPredicting && (
           <div className="mb-3 p-3 bg-accent/10 rounded-md border border-accent/30 flex items-center">
             <RefreshCw className="h-4 w-4 mr-2 animate-spin text-accent-foreground/70" />
             <p className="text-xs text-accent-foreground/70">Predicting relevance...</p>
@@ -101,7 +145,7 @@ export function ArticleCard({ article, onUpdateArticle, onDeleteArticle }: Artic
         )}
 
         <div className="flex flex-wrap gap-2 mb-2">
-          {article.tags.map((tag: Tag) => (
+          {article.tags && article.tags.map((tag: Tag) => ( // Added check for article.tags
             <Badge key={tag.id} variant="secondary">{tag.name}</Badge>
           ))}
         </div>
@@ -114,9 +158,9 @@ export function ArticleCard({ article, onUpdateArticle, onDeleteArticle }: Artic
               <BookOpen className="mr-2 h-4 w-4" /> Read
             </Link>
           </Button>
-          <Button variant="outline" size="sm" onClick={handlePredictRelevance} disabled={isPredicting || article.aiRelevance?.isLoading}>
-            {isPredicting || article.aiRelevance?.isLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-            {article.aiRelevance?.score ? 'Re-check' : 'AI Check'}
+          <Button variant="outline" size="sm" onClick={handlePredictRelevance} disabled={isPredicting}>
+            {isPredicting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+            {article.aiRelevance?.score !== undefined ? 'Re-check' : 'AI Check'}
           </Button>
           <Button variant="ghost" size="sm" asChild>
             <a href={article.url} target="_blank" rel="noopener noreferrer">

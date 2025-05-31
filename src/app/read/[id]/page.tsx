@@ -1,45 +1,91 @@
-'use client'; // Keep as client component to use hooks and state if needed later for interactions
 
-import React, { useEffect, useState } from 'react';
+'use client';
+
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import type { Article } from '@/types';
-import { MOCK_ARTICLES } from '@/lib/mock-data'; // Using mock data for now
+import type { Article, RssFeed } from '@/types'; // RssFeed might be needed for handleAddRssFeed
 import { ReaderView } from '@/components/articles/reader-view';
-import { AppHeader } from '@/components/layout/header'; // Import AppHeader
-import { AddContentDialog } from '@/components/forms/add-content-dialog'; // For consistency, header needs this
+import { AppHeader } from '@/components/layout/header';
+import { AddContentDialog } from '@/components/forms/add-content-dialog';
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from '@/context/auth-context';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
 
 export default function ArticleReadPage() {
   const params = useParams();
   const articleId = params.id as string;
+  const { user, loading: authLoading } = useAuth();
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // States for AddContentDialog, needed by AppHeader
   const [isAddContentDialogOpen, setIsAddContentDialogOpen] = useState(false);
-  const { toast } = useToast(); // toast might be used by header actions or dialog
+  const { toast } = useToast();
 
   useEffect(() => {
-    if (articleId) {
-      // Simulate fetching article data
-      const foundArticle = MOCK_ARTICLES.find(a => a.id === articleId);
-      setArticle(foundArticle || null);
+    if (!db || !user || !articleId) {
+      if (!authLoading && !user) {
+        toast({ title: "Authentication Required", description: "Please log in to view articles.", variant: "destructive" });
+      }
       setLoading(false);
+      return;
     }
-  }, [articleId]);
 
-  // Placeholder handlers for AddContentDialog
-  const handleAddArticle = (newArticleData: Partial<Article>) => {
-    console.log("Add article from reader page (placeholder):", newArticleData);
+    const fetchArticle = async () => {
+      setLoading(true);
+      try {
+        const articleRef = doc(db, 'articles', articleId);
+        const docSnap = await getDoc(articleRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.userId !== user.uid) {
+            toast({ title: "Access Denied", description: "You do not have permission to view this article.", variant: "destructive" });
+            setArticle(null);
+          } else {
+            const dateAdded = data.dateAdded instanceof Timestamp ? data.dateAdded.toDate().toISOString() : data.dateAdded as string;
+            setArticle({ 
+              ...data, 
+              id: docSnap.id,
+              dateAdded,
+              aiRelevance: data.aiRelevance ? { ...data.aiRelevance, isLoading: false } : undefined,
+            } as Article);
+          }
+        } else {
+          toast({ title: "Not Found", description: "Article not found in your library.", variant: "destructive" });
+          setArticle(null);
+        }
+      } catch (error) {
+        console.error("Error fetching article: ", error);
+        toast({ title: "Error", description: "Could not load the article.", variant: "destructive" });
+        setArticle(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchArticle();
+  }, [articleId, user, authLoading, toast]);
+
+  const handleAddArticle = useCallback((newArticleData: Partial<Article>) => {
+    if (!user) {
+      toast({ title: "Login Required", description: "Please log in to add articles." });
+      return;
+    }
+    console.log("Add article from reader page (placeholder for DB integration):", newArticleData);
     toast({ title: "Action Placeholder", description: "Add article action triggered."});
-  };
-  const handleAddRssFeed = (newFeed: Partial<RssFeed>) => { // RssFeed type might need to be imported
-    console.log("Add RSS feed from reader page (placeholder):", newFeed);
+  }, [user, toast]);
+
+  const handleAddRssFeed = useCallback((newFeed: Partial<RssFeed>) => {
+     if (!user) {
+      toast({ title: "Login Required", description: "Please log in to add RSS feeds." });
+      return;
+    }
+    console.log("Add RSS feed from reader page (placeholder for DB integration):", newFeed);
     toast({ title: "Action Placeholder", description: "Add RSS feed action triggered."});
-  };
+  }, [user, toast]);
 
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <main className="flex flex-1 flex-col">
         <AppHeader onAddContentClick={() => setIsAddContentDialogOpen(true)} />
@@ -51,10 +97,33 @@ export default function ArticleReadPage() {
             onOpenChange={setIsAddContentDialogOpen}
             onAddArticle={handleAddArticle}
             onAddRssFeed={handleAddRssFeed}
+            isUserLoggedIn={!!user}
         />
       </main>
     );
   }
+  
+  if (!user && !authLoading) {
+     return (
+      <main className="flex flex-1 flex-col">
+        <AppHeader onAddContentClick={() => setIsAddContentDialogOpen(true)} />
+        <div className="flex-1 flex items-center justify-center p-8 text-center">
+          <div>
+            <h2 className="text-2xl font-headline mb-2">Authentication Required</h2>
+            <p className="text-muted-foreground">Please log in to view this article.</p>
+          </div>
+        </div>
+         <AddContentDialog
+            isOpen={isAddContentDialogOpen}
+            onOpenChange={setIsAddContentDialogOpen}
+            onAddArticle={handleAddArticle}
+            onAddRssFeed={handleAddRssFeed}
+            isUserLoggedIn={!!user}
+        />
+      </main>
+    );
+  }
+
 
   return (
     <main className="flex flex-1 flex-col">
@@ -65,8 +134,9 @@ export default function ArticleReadPage() {
       <AddContentDialog
         isOpen={isAddContentDialogOpen}
         onOpenChange={setIsAddContentDialogOpen}
-        onAddArticle={handleAddArticle} // Placeholder
-        onAddRssFeed={handleAddRssFeed}   // Placeholder
+        onAddArticle={handleAddArticle}
+        onAddRssFeed={handleAddRssFeed}
+        isUserLoggedIn={!!user}
       />
     </main>
   );

@@ -48,9 +48,10 @@ interface AddContentDialogProps {
   onOpenChange: (isOpen: boolean) => void;
   onAddArticle: (article: Partial<Article>) => void;
   onAddRssFeed: (feed: Partial<RssFeed>) => void;
+  isUserLoggedIn: boolean;
 }
 
-export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssFeed }: AddContentDialogProps) {
+export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssFeed, isUserLoggedIn }: AddContentDialogProps) {
   const [isExtractingInfo, setIsExtractingInfo] = useState(false);
   const { toast } = useToast();
 
@@ -70,9 +71,14 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
   });
 
   const handleAddUrl = async (values: z.infer<typeof urlFormSchema>) => {
+    if (!isUserLoggedIn) {
+      toast({ title: "Login Required", description: "Please log in to add articles.", variant: "destructive" });
+      return;
+    }
     setIsExtractingInfo(true);
     let articleTitle = values.url; 
-    let articleSummary = 'Processing...'; 
+    let articleSummary = 'Processing...';
+    let sourceName; // Attempt to get source name if possible from URL or extraction
 
     try {
       toast({
@@ -83,6 +89,14 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
       
       articleTitle = extractedInfo.title; 
       articleSummary = extractedInfo.summary;
+      // Basic source name extraction (can be improved)
+      try {
+        const urlObject = new URL(values.url);
+        sourceName = urlObject.hostname.replace(/^www\./, '');
+      } catch {
+        sourceName = undefined;
+      }
+
 
       if (extractedInfo.title.toLowerCase().includes("extraction failed") || extractedInfo.summary.toLowerCase().includes("extraction failed")) {
           toast({
@@ -113,7 +127,9 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
       url: values.url,
       title: articleTitle,
       summary: articleSummary,
+      sourceName: sourceName,
       tags: [], 
+      // Let Firestore handle dateAdded and ID
     };
     onAddArticle(newArticle);
     urlForm.reset();
@@ -121,8 +137,12 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
   };
 
   const handleAddRss = (values: z.infer<typeof rssFormSchema>) => {
+     if (!isUserLoggedIn) {
+      toast({ title: "Login Required", description: "Please log in to add RSS feeds.", variant: "destructive" });
+      return;
+    }
     const newRssFeed: Partial<RssFeed> = {
-      id: Date.now().toString(),
+      // id: Date.now().toString(), // Let DB handle ID if this gets stored
       url: values.rssUrl,
       name: values.name,
       lastFetched: new Date().toISOString(),
@@ -144,83 +164,89 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
         <DialogHeader>
           <DialogTitle className="font-headline">Add New Content</DialogTitle>
           <DialogDescription>
-            Add a URL or an RSS feed to your personal archive.
+            {isUserLoggedIn ? "Add a URL or an RSS feed to your personal archive." : "Please log in to add content."}
           </DialogDescription>
         </DialogHeader>
-        <Tabs defaultValue="url" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="url">Add URL</TabsTrigger>
-            <TabsTrigger value="rss">Add RSS Feed</TabsTrigger>
-          </TabsList>
-          <TabsContent value="url">
-            <Form {...urlForm}>
-              <form onSubmit={urlForm.handleSubmit(handleAddUrl)} className="space-y-4 py-4">
-                <FormField
-                  control={urlForm.control}
-                  name="url"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Article URL</FormLabel>
-                      <FormControl>
-                        <Input placeholder="https://example.com/article" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                  <Button type="submit" disabled={isExtractingInfo}>
-                    {isExtractingInfo ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Extracting & Adding...
-                      </>
-                    ) : (
-                      'Add Article'
+        {isUserLoggedIn ? (
+          <Tabs defaultValue="url" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="url">Add URL</TabsTrigger>
+              <TabsTrigger value="rss">Add RSS Feed</TabsTrigger>
+            </TabsList>
+            <TabsContent value="url">
+              <Form {...urlForm}>
+                <form onSubmit={urlForm.handleSubmit(handleAddUrl)} className="space-y-4 py-4">
+                  <FormField
+                    control={urlForm.control}
+                    name="url"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Article URL</FormLabel>
+                        <FormControl>
+                          <Input placeholder="https://example.com/article" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </TabsContent>
-          <TabsContent value="rss">
-            <Form {...rssForm}>
-              <form onSubmit={rssForm.handleSubmit(handleAddRss)} className="space-y-4 py-4">
-                <FormField
-                  control={rssForm.control}
-                  name="rssUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>RSS Feed URL</FormLabel>
-                      <FormControl>
-                        <Input placeholder="https://example.com/feed.xml" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={rssForm.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Feed Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., My Favorite Blog" {...field} />
-                      </FormControl>
-                       <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                  <Button type="submit">Add RSS Feed</Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </TabsContent>
-        </Tabs>
+                  />
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button type="submit" disabled={isExtractingInfo || !isUserLoggedIn}>
+                      {isExtractingInfo ? (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                          Extracting & Adding...
+                        </>
+                      ) : (
+                        'Add Article'
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </TabsContent>
+            <TabsContent value="rss">
+              <Form {...rssForm}>
+                <form onSubmit={rssForm.handleSubmit(handleAddRss)} className="space-y-4 py-4">
+                  <FormField
+                    control={rssForm.control}
+                    name="rssUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>RSS Feed URL</FormLabel>
+                        <FormControl>
+                          <Input placeholder="https://example.com/feed.xml" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={rssForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Feed Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., My Favorite Blog" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button type="submit" disabled={!isUserLoggedIn}>Add RSS Feed</Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <div className="py-4 text-center text-muted-foreground">
+            Please log in to add content to your archive.
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

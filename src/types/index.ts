@@ -1,11 +1,14 @@
 
+import type { Timestamp } from 'firebase/firestore';
+
 export interface Tag {
   id: string;
   name: string;
 }
 
 export interface Article {
-  id: string;
+  id: string; // Firestore document ID
+  userId: string; // Firebase Auth User UID
   title: string;
   url: string;
   sourceName?: string;
@@ -13,14 +16,14 @@ export interface Article {
   summary?: string; // Short summary for card view
   imageUrl?: string;
   tags: Tag[];
-  dateAdded: string; // ISO string
+  dateAdded: string | Timestamp; // ISO string for client, Timestamp for Firestore
   aiRelevance?: {
     score: number;
     reasoning: string;
-    isLoading?: boolean;
+    isLoading?: boolean; // UI state, not stored in Firestore
   };
   isRead?: boolean;
-  dataAiHint?: string; // Added based on usage in page.tsx
+  dataAiHint?: string;
 }
 
 export interface RssFeed {
@@ -29,4 +32,3 @@ export interface RssFeed {
   name: string;
   lastFetched?: string; // ISO string
 }
-
