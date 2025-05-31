@@ -29,27 +29,16 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { TagInput } from './tag-input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import type { Article, Category, RssFeed, Tag } from '@/types';
-import { MOCK_CATEGORIES } from '@/lib/mock-data';
+// Removed Textarea, TagInput, Select components as they are no longer used for URL form
+import type { Article, RssFeed } from '@/types';
+// Removed MOCK_CATEGORIES, Tag, Category types as they are no longer used for URL form
 import { extractArticleInfo, type ExtractArticleInfoOutput } from '@/ai/flows/extract-article-info-flow';
 import { useToast } from "@/hooks/use-toast";
 import { RefreshCw } from 'lucide-react';
 
 const urlFormSchema = z.object({
   url: z.string().url({ message: "Please enter a valid URL." }),
-  title: z.string().optional(),
-  summary: z.string().optional(),
-  tags: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
-  categoryId: z.string().optional(),
+  // Title, summary, tags, categoryId are removed from schema
 });
 
 const rssFormSchema = z.object({
@@ -72,9 +61,7 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
     resolver: zodResolver(urlFormSchema),
     defaultValues: {
       url: '',
-      title: '',
-      summary: '',
-      tags: [],
+      // Removed other default values
     },
   });
 
@@ -88,44 +75,38 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
 
   const handleAddUrl = async (values: z.infer<typeof urlFormSchema>) => {
     setIsExtractingInfo(true);
-    let finalTitle = values.title;
-    let finalSummary = values.summary;
+    let articleTitle = values.url; // Fallback title
+    let articleSummary = 'Processing...'; // Fallback summary
 
     try {
       toast({
         title: "Extracting Information...",
-        description: "The AI is trying to fetch title and summary from the URL.",
+        description: "AI is fetching title and summary from the URL.",
       });
       const extractedInfo: ExtractArticleInfoOutput = await extractArticleInfo({ articleUrl: values.url });
       
-      if (extractedInfo) {
-        if (!finalTitle && extractedInfo.title && !extractedInfo.title.toLowerCase().includes("extraction failed")) {
-          finalTitle = extractedInfo.title;
-          urlForm.setValue('title', extractedInfo.title); // Update form for user visibility
-        }
-        if (!finalSummary && extractedInfo.summary && !extractedInfo.summary.toLowerCase().includes("extraction failed")) {
-          finalSummary = extractedInfo.summary;
-           urlForm.setValue('summary', extractedInfo.summary); // Update form for user visibility
-        }
+      articleTitle = extractedInfo.title; // Use directly, flow handles failure messages
+      articleSummary = extractedInfo.summary; // Use directly
 
-        if (extractedInfo.title.toLowerCase().includes("extraction failed")) {
-            toast({
-                title: "AI Extraction Issue",
-                description: extractedInfo.summary || "Could not fully extract information. Please review.",
-                variant: "destructive",
-            });
-        } else {
-             toast({
-                title: "Information Extracted",
-                description: "Title and summary have been populated. You can edit them if needed.",
-            });
-        }
+      if (extractedInfo.title.toLowerCase().includes("extraction failed") || extractedInfo.summary.toLowerCase().includes("extraction failed")) {
+          toast({
+              title: "AI Extraction Note",
+              description: "AI had trouble extracting all info. Review the added article.",
+              variant: "default", 
+          });
+      } else {
+           toast({
+              title: "Information Extracted",
+              description: "AI has processed the URL.",
+          });
       }
     } catch (error) {
       console.error("Failed to extract article info:", error);
+      articleTitle = values.url; // Revert to URL if API call itself fails
+      articleSummary = "Error extracting content. Please check the URL or try again.";
       toast({
         title: "AI Extraction Error",
-        description: "Could not automatically extract title/summary. Please enter them manually.",
+        description: "Could not process the URL due to an error.",
         variant: "destructive",
       });
     } finally {
@@ -133,15 +114,12 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
     }
 
     const newArticle: Partial<Article> = {
-      id: Date.now().toString(),
       url: values.url,
-      title: finalTitle || values.url, 
-      summary: finalSummary,
-      tags: values.tags || [],
-      category: values.categoryId ? MOCK_CATEGORIES.find(c => c.id === values.categoryId) : undefined,
-      dateAdded: new Date().toISOString(),
-      imageUrl: 'https://placehold.co/600x400.png',
-      dataAiHint: 'general web content',
+      title: articleTitle,
+      summary: articleSummary,
+      tags: [], // Tags are no longer collected in this dialog
+      category: undefined, // Category is no longer collected
+      // id, dateAdded, imageUrl, dataAiHint will be defaulted by the parent component (page.tsx)
     };
     onAddArticle(newArticle);
     urlForm.reset();
@@ -196,69 +174,7 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={urlForm.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Title (Optional, AI will try to extract)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Custom title for the article" {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={urlForm.control}
-                  name="summary"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Summary (Optional, AI will try to extract)</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="A brief summary of the article" {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={urlForm.control}
-                  name="tags"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tags (Optional)</FormLabel>
-                      <FormControl>
-                        <TagInput
-                          value={field.value || []}
-                          onChange={field.onChange}
-                          placeholder="Add tags (press Enter or ,)"
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={urlForm.control}
-                  name="categoryId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Category (Optional)</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {MOCK_CATEGORIES.map(category => (
-                            <SelectItem key={category.id} value={category.id}>
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )}
-                />
+                {/* Removed FormFields for title, summary, tags, categoryId */}
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                   <Button type="submit" disabled={isExtractingInfo}>
@@ -316,3 +232,4 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
     </Dialog>
   );
 }
+
