@@ -1,7 +1,6 @@
-
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getAuth, GoogleAuthProvider, type Auth, initializeAuth, inMemoryPersistence } from 'firebase/auth';
+import { getFirestore, type Firestore, initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 
 const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
 const authDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
@@ -51,7 +50,9 @@ export function getFirebaseAuth(): Auth | null {
   }
   if (!authInstance) {
     try {
-      authInstance = getAuth(app);
+      authInstance = initializeAuth(app, {
+        persistence: inMemoryPersistence
+      });
     } catch (error) {
       console.error("Error getting Firebase Auth instance:", error);
       authInstance = null; // Ensure instance is null on error
@@ -67,7 +68,9 @@ export function getFirebaseFirestore(): Firestore | null {
   }
   if (!dbInstance) {
     try {
-      dbInstance = getFirestore(app);
+      dbInstance = initializeFirestore(app, {
+        localCache: memoryLocalCache(/* { garbageCollection: false } */) // Disables GC with an option
+      });
     } catch (error) {
       console.error("Error getting Firebase Firestore instance:", error);
       dbInstance = null; // Ensure instance is null on error
