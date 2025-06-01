@@ -43,7 +43,7 @@ export default function LibraryPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const db = getFirebaseFirestore(); 
+    const db = getFirebaseFirestore();
     if (!db || !user) {
       setArticles([]);
       setIsLoadingArticles(false);
@@ -67,20 +67,20 @@ export default function LibraryPage() {
         } else if (typeof data.dateAdded === 'string') {
           const parsedDate = new Date(data.dateAdded);
           if (!isNaN(parsedDate.getTime())) {
-            clientDateAdded = data.dateAdded; // It's already a string, and it's valid
+            clientDateAdded = data.dateAdded; 
           } else {
-            console.warn(`Article ${docSnap.id} has invalid dateAdded string: ${data.dateAdded}. Falling back.`);
-            clientDateAdded = new Date().toISOString(); // Fallback for invalid string
+            console.warn(`Article ${docSnap.id} has invalid dateAdded string: ${data.dateAdded}. Falling back to current date.`);
+            clientDateAdded = new Date().toISOString(); 
           }
         } else {
-          console.warn(`Article ${docSnap.id} has missing or unexpected dateAdded type: ${typeof data.dateAdded}. Falling back.`);
-          clientDateAdded = new Date().toISOString(); // Fallback for missing or wrong type
+          console.warn(`Article ${docSnap.id} has missing or unexpected dateAdded type: ${typeof data.dateAdded}. Falling back to current date.`);
+          clientDateAdded = new Date().toISOString(); 
         }
 
         return {
           ...data,
           id: docSnap.id,
-          dateAdded: clientDateAdded, // Ensured to be an ISO string
+          dateAdded: clientDateAdded,
           aiRelevance: data.aiRelevance ? { ...data.aiRelevance, isLoading: false } : null,
         } as Article;
       });
@@ -106,11 +106,11 @@ export default function LibraryPage() {
         description: "Please log in to add articles to your library.",
         variant: "destructive",
       });
-      setIsAddContentDialogOpen(false); 
+      setIsAddContentDialogOpen(false);
       return;
     }
 
-    const db = getFirebaseFirestore(); 
+    const db = getFirebaseFirestore();
     if (!db) {
         toast({ title: "Database Error", description: "Database not available. Cannot save article.", variant: "destructive" });
         return;
@@ -119,7 +119,7 @@ export default function LibraryPage() {
     const articleToSave: Omit<Article, 'id' | 'dateAdded'> & { dateAdded: any } = {
       userId: user.uid,
       title: newArticleData.title || 'Untitled Article',
-      url: newArticleData.url!,
+      url: newArticleData.url!, 
       summary: newArticleData.summary || 'No summary available.',
       tags: newArticleData.tags || [],
       dateAdded: serverTimestamp(),
@@ -128,21 +128,34 @@ export default function LibraryPage() {
       dataAiHint: newArticleData.dataAiHint || 'general content',
       sourceName: newArticleData.sourceName ?? null,
       content: newArticleData.content ?? null,
-      aiRelevance: newArticleData.aiRelevance 
-        ? { score: newArticleData.aiRelevance.score, reasoning: newArticleData.aiRelevance.reasoning } 
+      aiRelevance: newArticleData.aiRelevance && newArticleData.aiRelevance.score !== undefined
+        ? { score: newArticleData.aiRelevance.score, reasoning: newArticleData.aiRelevance.reasoning }
         : null,
     };
 
     try {
-      await addDoc(collection(db, 'articles'), articleToSave);
+      console.log("Attempting to add article to Firestore with data:", JSON.stringify(articleToSave, null, 2));
+      const docRef = await addDoc(collection(db, 'articles'), articleToSave);
+      console.log("Article added successfully to Firestore with ID: ", docRef.id);
       toast({
         title: "Article Added",
         description: `"${articleToSave.title}" has been added to your library.`,
       });
-      setIsAddContentDialogOpen(false); 
+      setIsAddContentDialogOpen(false);
     } catch (error) {
-      console.error("Error adding article: ", error);
-      toast({ title: "Error", description: "Could not add article to your library.", variant: "destructive" });
+      console.error("FirebaseError: Error adding article to Firestore: ", error);
+      let detailedErrorMessage = "Could not save article. Please check browser console for details.";
+      if (error instanceof Error) {
+        detailedErrorMessage = `Failed to save article: ${error.message}`;
+        if ((error as any).code) { // Check for Firebase error code
+          detailedErrorMessage += ` (Error Code: ${(error as any).code})`;
+        }
+      }
+      toast({
+        title: "Save Error",
+        description: detailedErrorMessage,
+        variant: "destructive",
+      });
     }
   }, [user, toast]);
 
@@ -157,7 +170,6 @@ export default function LibraryPage() {
       setIsAddContentDialogOpen(false);
       return;
     }
-    // For now, RSS feeds are added locally. Firestore persistence can be added later.
     const completeFeed: RssFeed = {
       id: newFeed.id || Date.now().toString(),
       url: newFeed.url || '',
@@ -173,7 +185,7 @@ export default function LibraryPage() {
   };
 
   const handleUpdateArticle = useCallback(async (updatedArticle: Article) => {
-    const db = getFirebaseFirestore(); 
+    const db = getFirebaseFirestore();
     if (!db || !user || !updatedArticle.id) {
       toast({ title: "Error", description: "Could not update article. User or article ID missing.", variant: "destructive" });
       return;
@@ -181,44 +193,49 @@ export default function LibraryPage() {
 
     const articleRef = doc(db, 'articles', updatedArticle.id);
     
-    // aiRelevance for saving: ensure isLoading is not part of it, and it's null if not present
     const aiRelevanceToSave = updatedArticle.aiRelevance && updatedArticle.aiRelevance.score !== undefined
         ? { score: updatedArticle.aiRelevance.score, reasoning: updatedArticle.aiRelevance.reasoning }
         : null;
     
     let dateAddedForUpdate: Date;
-    // updatedArticle.dateAdded should be an ISO string from the client state
     if (typeof updatedArticle.dateAdded === 'string') {
       const parsedDate = new Date(updatedArticle.dateAdded);
       if (!isNaN(parsedDate.getTime())) {
         dateAddedForUpdate = parsedDate;
       } else {
-        // Fallback if the string is somehow invalid, though onSnapshot should prevent this
-        dateAddedForUpdate = new Date(); 
+        dateAddedForUpdate = new Date();
       }
-    } else if (updatedArticle.dateAdded instanceof Timestamp) { 
-      // This case should not happen if client state `dateAdded` is always string
+    } else if (updatedArticle.dateAdded instanceof Timestamp) {
       dateAddedForUpdate = updatedArticle.dateAdded.toDate();
     }
      else {
-      dateAddedForUpdate = new Date(); 
+      dateAddedForUpdate = new Date();
     }
 
     const dataToUpdate = {
         ...updatedArticle,
-        aiRelevance: aiRelevanceToSave, // Use processed aiRelevance
-        dateAdded: dateAddedForUpdate, // Send Date object to Firestore
+        aiRelevance: aiRelevanceToSave,
+        dateAdded: dateAddedForUpdate,
         content: updatedArticle.content ?? null,
         sourceName: updatedArticle.sourceName ?? null,
     };
-    delete (dataToUpdate as any).id; 
+    delete (dataToUpdate as any).id;
 
     try {
+      console.log("Attempting to update article in Firestore with data:", JSON.stringify(dataToUpdate, null, 2));
       await updateDoc(articleRef, dataToUpdate);
-      // Update toast could be here or handled by the calling component
+      console.log("Article updated successfully in Firestore for ID: ", updatedArticle.id);
+      // Toast for update success can be here or handled by calling component
     } catch (error) {
-      console.error("Error updating article: ", error);
-      toast({ title: "Error", description: "Could not update article.", variant: "destructive" });
+      console.error("FirebaseError: Error updating article in Firestore: ", error);
+      let detailedErrorMessage = "Could not update article. Please check browser console for details.";
+      if (error instanceof Error) {
+        detailedErrorMessage = `Failed to update article: ${error.message}`;
+         if ((error as any).code) {
+          detailedErrorMessage += ` (Error Code: ${(error as any).code})`;
+        }
+      }
+      toast({ title: "Update Error", description: detailedErrorMessage, variant: "destructive" });
     }
   }, [user, toast]);
 
@@ -232,7 +249,7 @@ export default function LibraryPage() {
       return;
     }
 
-    const db = getFirebaseFirestore(); 
+    const db = getFirebaseFirestore();
     if (!db || !user) {
          toast({ title: "Error", description: "Could not delete article. User or database not available.", variant: "destructive" });
         return;
@@ -240,15 +257,24 @@ export default function LibraryPage() {
 
     const articleRef = doc(db, 'articles', articleToDelete.id);
     try {
+      console.log("Attempting to delete article from Firestore with ID: ", articleToDelete.id);
       await deleteDoc(articleRef);
+      console.log("Article deleted successfully from Firestore.");
       toast({
         title: "Article Deleted",
         description: `"${articleToDelete.title}" has been removed from your library.`,
       });
       setArticleToDelete(null);
     } catch (error) {
-      console.error("Error deleting article: ", error);
-      toast({ title: "Error", description: "Could not delete article.", variant: "destructive" });
+      console.error("FirebaseError: Error deleting article from Firestore: ", error);
+      let detailedErrorMessage = "Could not delete article. Please check browser console for details.";
+       if (error instanceof Error) {
+        detailedErrorMessage = `Failed to delete article: ${error.message}`;
+        if ((error as any).code) {
+          detailedErrorMessage += ` (Error Code: ${(error as any).code})`;
+        }
+      }
+      toast({ title: "Delete Error", description: detailedErrorMessage, variant: "destructive" });
       setArticleToDelete(null);
     }
   };
@@ -305,3 +331,5 @@ export default function LibraryPage() {
     </main>
   );
 }
+
+    
