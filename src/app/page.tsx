@@ -43,7 +43,7 @@ export default function LibraryPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const db = getFirebaseFirestore(); // Get db instance
+    const db = getFirebaseFirestore(); 
     if (!db || !user) {
       setArticles([]);
       setIsLoadingArticles(false);
@@ -90,11 +90,11 @@ export default function LibraryPage() {
         description: "Please log in to add articles to your library.",
         variant: "destructive",
       });
-      setIsAddContentDialogOpen(false); // Close the dialog
+      setIsAddContentDialogOpen(false); 
       return;
     }
 
-    const db = getFirebaseFirestore(); // Get db instance
+    const db = getFirebaseFirestore(); 
     if (!db) {
         toast({ title: "Database Error", description: "Database not available. Cannot save article.", variant: "destructive" });
         return;
@@ -110,9 +110,11 @@ export default function LibraryPage() {
       isRead: false,
       imageUrl: newArticleData.imageUrl || 'https://placehold.co/600x400.png',
       dataAiHint: newArticleData.dataAiHint || 'general content',
-      sourceName: newArticleData.sourceName,
-      content: newArticleData.content,
-      aiRelevance: newArticleData.aiRelevance ? { score: newArticleData.aiRelevance.score, reasoning: newArticleData.aiRelevance.reasoning } : undefined,
+      sourceName: newArticleData.sourceName ?? null,
+      content: newArticleData.content ?? null,
+      aiRelevance: newArticleData.aiRelevance 
+        ? { score: newArticleData.aiRelevance.score, reasoning: newArticleData.aiRelevance.reasoning } 
+        : null,
     };
 
     try {
@@ -121,6 +123,7 @@ export default function LibraryPage() {
         title: "Article Added",
         description: `"${articleToSave.title}" has been added to your library.`,
       });
+      setIsAddContentDialogOpen(false); 
     } catch (error) {
       console.error("Error adding article: ", error);
       toast({ title: "Error", description: "Could not add article to your library.", variant: "destructive" });
@@ -129,7 +132,16 @@ export default function LibraryPage() {
 
 
   const handleAddRssFeed = (newFeed: Partial<RssFeed>) => {
-    // RSS feed logic remains local for now, not tied to Firebase auth for this change
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please log in to add RSS feeds.",
+        variant: "destructive",
+      });
+      setIsAddContentDialogOpen(false);
+      return;
+    }
+    // For now, RSS feeds are added locally. Firestore persistence can be added later.
     const completeFeed: RssFeed = {
       id: newFeed.id || Date.now().toString(),
       url: newFeed.url || '',
@@ -139,12 +151,13 @@ export default function LibraryPage() {
     setRssFeeds(prevFeeds => [completeFeed, ...prevFeeds]);
      toast({
       title: "RSS Feed Added",
-      description: `"${completeFeed.name}" has been added. Articles will appear soon.`,
+      description: `"${completeFeed.name}" has been added. (Note: RSS feeds are currently local and not saved to Firebase)`,
     });
+    setIsAddContentDialogOpen(false);
   };
 
   const handleUpdateArticle = useCallback(async (updatedArticle: Article) => {
-    const db = getFirebaseFirestore(); // Get db instance
+    const db = getFirebaseFirestore(); 
     if (!db || !user || !updatedArticle.id) {
       toast({ title: "Error", description: "Could not update article. User or article ID missing.", variant: "destructive" });
       return;
@@ -152,15 +165,32 @@ export default function LibraryPage() {
 
     const articleRef = doc(db, 'articles', updatedArticle.id);
     const { isLoading, ...aiRelevanceToSave } = updatedArticle.aiRelevance || {};
+    
+    // Ensure dateAdded is a Firebase Timestamp or a Date object for update
+    let dateAddedForUpdate: Timestamp | Date;
+    if (updatedArticle.dateAdded instanceof Timestamp) {
+      dateAddedForUpdate = updatedArticle.dateAdded;
+    } else if (typeof updatedArticle.dateAdded === 'string') {
+      dateAddedForUpdate = new Date(updatedArticle.dateAdded);
+    } else {
+      // Fallback or handle error if dateAdded is not in expected format
+      // For this example, we'll default to now, but ideally this case is handled by type consistency.
+      dateAddedForUpdate = new Date(); 
+    }
+
     const dataToUpdate = {
         ...updatedArticle,
         aiRelevance: updatedArticle.aiRelevance ? aiRelevanceToSave : null,
-        dateAdded: updatedArticle.dateAdded instanceof Timestamp ? updatedArticle.dateAdded : new Date(updatedArticle.dateAdded as string)
+        dateAdded: dateAddedForUpdate,
+        // Ensure optional fields are null if undefined
+        content: updatedArticle.content ?? null,
+        sourceName: updatedArticle.sourceName ?? null,
     };
-    delete (dataToUpdate as any).id;
+    delete (dataToUpdate as any).id; // id should not be part of the update data
 
     try {
       await updateDoc(articleRef, dataToUpdate);
+      // Toast for update is often handled by the component triggering it, or can be added here
     } catch (error) {
       console.error("Error updating article: ", error);
       toast({ title: "Error", description: "Could not update article.", variant: "destructive" });
@@ -177,7 +207,7 @@ export default function LibraryPage() {
       return;
     }
 
-    const db = getFirebaseFirestore(); // Get db instance
+    const db = getFirebaseFirestore(); 
     if (!db || !user) {
          toast({ title: "Error", description: "Could not delete article. User or database not available.", variant: "destructive" });
         return;
@@ -206,7 +236,7 @@ export default function LibraryPage() {
       <div className="flex-1 overflow-auto">
         {authLoading || (isLoadingArticles && user) ? (
           <div className="text-center py-12 text-muted-foreground">Loading articles...</div>
-        ) : !user && !authLoading && displayArticles.length === 0 ? (
+        ) : !user && !authLoading ? ( // Removed check for displayArticles.length here
           <div className="text-center py-12">
             <h2 className="text-2xl font-headline mb-2">Welcome to Your Personal Archive</h2>
             <p className="text-muted-foreground">Please log in to add, manage, and view your articles.</p>
@@ -214,7 +244,7 @@ export default function LibraryPage() {
         ) : displayArticles.length === 0 && !isLoadingArticles ? (
           <div className="text-center py-12">
             <h2 className="text-2xl font-headline mb-2">Your Library is Empty</h2>
-            <p className="text-muted-foreground">Add some articles or RSS feeds to get started!</p>
+            <p className="text-muted-foreground">Click "Add Content" to save your first article!</p>
           </div>
         ) : (
           <ArticleList
