@@ -3,8 +3,9 @@
 
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { User } from 'firebase/auth';
-import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { getFirebaseAuth, googleAuthProvider } from '@/lib/firebase'; // Use getter
+// Import GoogleAuthProvider class here and remove googleAuthProvider instance import
+import { onAuthStateChanged, signInWithPopup, signOut, GoogleAuthProvider } from 'firebase/auth';
+import { getFirebaseAuth } from '@/lib/firebase'; // Use getter
 import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
@@ -24,8 +25,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const auth = getFirebaseAuth(); // Get auth instance
     if (!auth) {
-      // This case is handled by getFirebaseAuth logging or initial firebase.ts warning
-      // console.warn("Firebase Auth is not initialized. Skipping AuthProvider setup.");
       setLoading(false);
       setUser(null);
       return;
@@ -51,7 +50,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     setLoading(true);
     try {
-      await signInWithPopup(auth, googleAuthProvider);
+      // Instantiate GoogleAuthProvider directly here
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
       toast({
         title: 'Signed In',
         description: 'Successfully signed in with Google.',
@@ -60,13 +61,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error("Error signing in with Google: ", error);
       let errorMessage = 'Could not sign in with Google. Please try again.';
       if (error instanceof Error) {
-        if ('code' in error && typeof error.code === 'string') {
-            if (error.code === 'auth/popup-closed-by-user') {
+        // Check if it's a FirebaseError-like object
+        const firebaseError = error as any; // Use 'any' for broader compatibility if direct type import is tricky
+        if (firebaseError.code) {
+            if (firebaseError.code === 'auth/popup-closed-by-user') {
                 errorMessage = 'Sign-in popup closed before completion.';
-            } else if (error.code === 'auth/cancelled-popup-request') {
+            } else if (firebaseError.code === 'auth/cancelled-popup-request') {
                 errorMessage = 'Sign-in popup request cancelled.';
-            } else if (error.code === 'auth/web-storage-unsupported' || error.message.includes('Access to storage is not allowed')) {
+            } else if (firebaseError.code === 'auth/web-storage-unsupported' || firebaseError.message?.includes('Access to storage is not allowed')) {
                 errorMessage = 'Browser storage is unavailable or disallowed. Please check your browser settings (e.g., third-party cookies, iframe restrictions).';
+            } else if (firebaseError.code === 'auth/argument-error') {
+                errorMessage = 'Firebase authentication argument error. Please check configuration.';
             }
         }
       }
