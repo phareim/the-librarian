@@ -58,14 +58,30 @@ export default function LibraryPage() {
     const q = query(articlesCol, where('userId', '==', user.uid), orderBy('dateAdded', 'desc'));
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const fetchedArticles = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        const dateAdded = data.dateAdded instanceof Timestamp ? data.dateAdded.toDate().toISOString() : data.dateAdded as string;
+      const fetchedArticles = querySnapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        
+        let clientDateAdded: string;
+        if (data.dateAdded instanceof Timestamp) {
+          clientDateAdded = data.dateAdded.toDate().toISOString();
+        } else if (typeof data.dateAdded === 'string') {
+          const parsedDate = new Date(data.dateAdded);
+          if (!isNaN(parsedDate.getTime())) {
+            clientDateAdded = data.dateAdded; // It's already a string, and it's valid
+          } else {
+            console.warn(`Article ${docSnap.id} has invalid dateAdded string: ${data.dateAdded}. Falling back.`);
+            clientDateAdded = new Date().toISOString(); // Fallback for invalid string
+          }
+        } else {
+          console.warn(`Article ${docSnap.id} has missing or unexpected dateAdded type: ${typeof data.dateAdded}. Falling back.`);
+          clientDateAdded = new Date().toISOString(); // Fallback for missing or wrong type
+        }
+
         return {
           ...data,
-          id: doc.id,
-          dateAdded,
-          aiRelevance: data.aiRelevance ? { ...data.aiRelevance, isLoading: false } : undefined,
+          id: docSnap.id,
+          dateAdded: clientDateAdded, // Ensured to be an ISO string
+          aiRelevance: data.aiRelevance ? { ...data.aiRelevance, isLoading: false } : null,
         } as Article;
       });
       setArticles(fetchedArticles);
@@ -164,33 +180,42 @@ export default function LibraryPage() {
     }
 
     const articleRef = doc(db, 'articles', updatedArticle.id);
-    const { isLoading, ...aiRelevanceToSave } = updatedArticle.aiRelevance || {};
     
-    // Ensure dateAdded is a Firebase Timestamp or a Date object for update
-    let dateAddedForUpdate: Timestamp | Date;
-    if (updatedArticle.dateAdded instanceof Timestamp) {
-      dateAddedForUpdate = updatedArticle.dateAdded;
-    } else if (typeof updatedArticle.dateAdded === 'string') {
-      dateAddedForUpdate = new Date(updatedArticle.dateAdded);
-    } else {
-      // Fallback or handle error if dateAdded is not in expected format
-      // For this example, we'll default to now, but ideally this case is handled by type consistency.
+    // aiRelevance for saving: ensure isLoading is not part of it, and it's null if not present
+    const aiRelevanceToSave = updatedArticle.aiRelevance && updatedArticle.aiRelevance.score !== undefined
+        ? { score: updatedArticle.aiRelevance.score, reasoning: updatedArticle.aiRelevance.reasoning }
+        : null;
+    
+    let dateAddedForUpdate: Date;
+    // updatedArticle.dateAdded should be an ISO string from the client state
+    if (typeof updatedArticle.dateAdded === 'string') {
+      const parsedDate = new Date(updatedArticle.dateAdded);
+      if (!isNaN(parsedDate.getTime())) {
+        dateAddedForUpdate = parsedDate;
+      } else {
+        // Fallback if the string is somehow invalid, though onSnapshot should prevent this
+        dateAddedForUpdate = new Date(); 
+      }
+    } else if (updatedArticle.dateAdded instanceof Timestamp) { 
+      // This case should not happen if client state `dateAdded` is always string
+      dateAddedForUpdate = updatedArticle.dateAdded.toDate();
+    }
+     else {
       dateAddedForUpdate = new Date(); 
     }
 
     const dataToUpdate = {
         ...updatedArticle,
-        aiRelevance: updatedArticle.aiRelevance ? aiRelevanceToSave : null,
-        dateAdded: dateAddedForUpdate,
-        // Ensure optional fields are null if undefined
+        aiRelevance: aiRelevanceToSave, // Use processed aiRelevance
+        dateAdded: dateAddedForUpdate, // Send Date object to Firestore
         content: updatedArticle.content ?? null,
         sourceName: updatedArticle.sourceName ?? null,
     };
-    delete (dataToUpdate as any).id; // id should not be part of the update data
+    delete (dataToUpdate as any).id; 
 
     try {
       await updateDoc(articleRef, dataToUpdate);
-      // Toast for update is often handled by the component triggering it, or can be added here
+      // Update toast could be here or handled by the calling component
     } catch (error) {
       console.error("Error updating article: ", error);
       toast({ title: "Error", description: "Could not update article.", variant: "destructive" });
@@ -236,7 +261,7 @@ export default function LibraryPage() {
       <div className="flex-1 overflow-auto">
         {authLoading || (isLoadingArticles && user) ? (
           <div className="text-center py-12 text-muted-foreground">Loading articles...</div>
-        ) : !user && !authLoading ? ( // Removed check for displayArticles.length here
+        ) : !user && !authLoading ? (
           <div className="text-center py-12">
             <h2 className="text-2xl font-headline mb-2">Welcome to Your Personal Archive</h2>
             <p className="text-muted-foreground">Please log in to add, manage, and view your articles.</p>
