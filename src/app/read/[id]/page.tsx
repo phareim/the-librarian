@@ -3,13 +3,13 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import type { Article, RssFeed } from '@/types'; // RssFeed might be needed for handleAddRssFeed
+import type { Article, RssFeed } from '@/types'; 
 import { ReaderView } from '@/components/articles/reader-view';
 import { AppHeader } from '@/components/layout/header';
 import { AddContentDialog } from '@/components/forms/add-content-dialog';
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/auth-context';
-import { db } from '@/lib/firebase';
+import { getFirebaseFirestore } from '@/lib/firebase'; // Use getter
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 
 export default function ArticleReadPage() {
@@ -22,6 +22,7 @@ export default function ArticleReadPage() {
   const { toast } = useToast();
 
   useEffect(() => {
+    const db = getFirebaseFirestore(); // Get db instance
     if (!db || !user || !articleId) {
       if (!authLoading && !user) {
         toast({ title: "Authentication Required", description: "Please log in to view articles.", variant: "destructive" });
@@ -66,23 +67,19 @@ export default function ArticleReadPage() {
     fetchArticle();
   }, [articleId, user, authLoading, toast]);
 
+  // These handlers are placeholders if "Add Content" is used from this page.
+  // Actual article addition logic is primarily in page.tsx.
   const handleAddArticle = useCallback((newArticleData: Partial<Article>) => {
-    if (!user) {
-      toast({ title: "Login Required", description: "Please log in to add articles." });
-      return;
-    }
-    console.log("Add article from reader page (placeholder for DB integration):", newArticleData);
-    toast({ title: "Action Placeholder", description: "Add article action triggered."});
-  }, [user, toast]);
+    // This typically would call a global add function or redirect.
+    // For now, it's a placeholder as the dialog is available app-wide.
+    toast({ title: "Action Not Primary Here", description: "Use 'Add Content' from the main library for full functionality."});
+    setIsAddContentDialogOpen(false); // Close dialog if opened from here
+  }, [toast]);
 
   const handleAddRssFeed = useCallback((newFeed: Partial<RssFeed>) => {
-     if (!user) {
-      toast({ title: "Login Required", description: "Please log in to add RSS feeds." });
-      return;
-    }
-    console.log("Add RSS feed from reader page (placeholder for DB integration):", newFeed);
-    toast({ title: "Action Placeholder", description: "Add RSS feed action triggered."});
-  }, [user, toast]);
+    toast({ title: "Action Not Primary Here", description: "Use 'Add Content' from the main library for full functionality."});
+    setIsAddContentDialogOpen(false);
+  }, [toast]);
 
 
   if (authLoading || loading) {

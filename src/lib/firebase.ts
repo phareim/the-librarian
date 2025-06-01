@@ -11,8 +11,8 @@ const messagingSenderId = process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID;
 const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
 
 let app: FirebaseApp | null = null;
-let auth: Auth | null = null;
-let db: Firestore | null = null;
+let authInstance: Auth | null = null;
+let dbInstance: Firestore | null = null;
 const googleAuthProvider = new GoogleAuthProvider();
 
 if (apiKey && authDomain && projectId && appId) {
@@ -30,21 +30,10 @@ if (apiKey && authDomain && projectId && appId) {
       app = initializeApp(firebaseConfig);
     } catch (error) {
       console.error("Firebase initialization error:", error);
+      app = null; // Ensure app is null if initialization fails
     }
   } else {
     app = getApp();
-  }
-
-  if (app) {
-    try {
-      auth = getAuth(app);
-      db = getFirestore(app);
-    } catch (error) {
-      console.error("Firebase services initialization error:", error);
-      app = null; // Ensure app is also null if auth or db fails critically
-      auth = null;
-      db = null;
-    }
   }
 } else {
   console.warn(
@@ -55,4 +44,37 @@ if (apiKey && authDomain && projectId && appId) {
   );
 }
 
-export { app, auth, db, googleAuthProvider };
+export function getFirebaseAuth(): Auth | null {
+  if (!app) {
+    // Warning for app not initialized is already handled above
+    return null;
+  }
+  if (!authInstance) {
+    try {
+      authInstance = getAuth(app);
+    } catch (error) {
+      console.error("Error getting Firebase Auth instance:", error);
+      authInstance = null; // Ensure instance is null on error
+    }
+  }
+  return authInstance;
+}
+
+export function getFirebaseFirestore(): Firestore | null {
+  if (!app) {
+    // Warning for app not initialized is already handled above
+    return null;
+  }
+  if (!dbInstance) {
+    try {
+      dbInstance = getFirestore(app);
+    } catch (error) {
+      console.error("Error getting Firebase Firestore instance:", error);
+      dbInstance = null; // Ensure instance is null on error
+    }
+  }
+  return dbInstance;
+}
+
+// Export app and googleAuthProvider directly as they don't have the same lazy-init needs for storage.
+export { app, googleAuthProvider };

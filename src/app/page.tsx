@@ -8,7 +8,7 @@ import { AddContentDialog } from '@/components/forms/add-content-dialog';
 import { AppHeader } from '@/components/layout/header';
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/auth-context';
-import { db } from '@/lib/firebase';
+import { getFirebaseFirestore } from '@/lib/firebase'; // Use getter
 import {
   collection,
   addDoc,
@@ -43,8 +43,9 @@ export default function LibraryPage() {
   const { toast } = useToast();
 
   useEffect(() => {
+    const db = getFirebaseFirestore(); // Get db instance
     if (!db || !user) {
-      setArticles([]); // Clear articles if no user or no DB
+      setArticles([]); 
       setIsLoadingArticles(false);
       if (!authLoading && !user) {
          // User is not logged in and auth is not loading
@@ -83,10 +84,10 @@ export default function LibraryPage() {
   }, [user, authLoading, toast]);
 
   const handleAddArticle = useCallback(async (newArticleData: Partial<Article>) => {
-    if (!user) { // Workaround: If no user, add locally for this session
+    if (!user) { 
       const localArticle: Article = {
         id: `local-${Date.now().toString()}`,
-        userId: 'local-session-user', // Placeholder, not saved to DB
+        userId: 'local-session-user', 
         title: newArticleData.title || 'Untitled Article',
         url: newArticleData.url || '',
         summary: newArticleData.summary || 'No summary available.',
@@ -107,12 +108,12 @@ export default function LibraryPage() {
       return;
     }
 
+    const db = getFirebaseFirestore(); // Get db instance
     if (!db) {
         toast({ title: "Database Error", description: "Database not available. Cannot save article.", variant: "destructive" });
         return;
     }
 
-    // Original Firestore logic if user AND db are available
     const articleToSave: Omit<Article, 'id' | 'dateAdded'> & { dateAdded: any } = {
       userId: user.uid,
       title: newArticleData.title || 'Untitled Article',
@@ -124,7 +125,7 @@ export default function LibraryPage() {
       imageUrl: newArticleData.imageUrl || 'https://placehold.co/600x400.png',
       dataAiHint: newArticleData.dataAiHint || 'general content',
       sourceName: newArticleData.sourceName,
-      content: newArticleData.content, // Ensure this is passed if available
+      content: newArticleData.content, 
       aiRelevance: newArticleData.aiRelevance ? { score: newArticleData.aiRelevance.score, reasoning: newArticleData.aiRelevance.reasoning } : undefined,
     };
     
@@ -138,11 +139,10 @@ export default function LibraryPage() {
       console.error("Error adding article: ", error);
       toast({ title: "Error", description: "Could not add article to your library.", variant: "destructive" });
     }
-  }, [user, db, toast]);
+  }, [user, toast]);
 
 
   const handleAddRssFeed = (newFeed: Partial<RssFeed>) => {
-    // RSS Feed logic will need Firestore integration similar to articles if persisted
     const completeFeed: RssFeed = {
       id: newFeed.id || Date.now().toString(),
       url: newFeed.url || '',
@@ -157,10 +157,10 @@ export default function LibraryPage() {
   };
 
   const handleUpdateArticle = useCallback(async (updatedArticle: Article) => {
+    const db = getFirebaseFirestore(); // Get db instance
     if (!db || !user || !updatedArticle.id || updatedArticle.id.startsWith('local-')) {
-      if (updatedArticle.id.startsWith('local-')) { // Handle local update
+      if (updatedArticle.id.startsWith('local-')) { 
          setArticles(prevArticles => prevArticles.map(a => a.id === updatedArticle.id ? updatedArticle : a));
-         // toast({ title: "Local Article Updated", description: `"${updatedArticle.title}" has been updated in this session.` });
          return;
       }
       toast({ title: "Error", description: "Could not update article. User or article ID missing.", variant: "destructive" });
@@ -178,12 +178,11 @@ export default function LibraryPage() {
 
     try {
       await updateDoc(articleRef, dataToUpdate);
-      // Optimistic update handled by onSnapshot
     } catch (error) {
       console.error("Error updating article: ", error);
       toast({ title: "Error", description: "Could not update article.", variant: "destructive" });
     }
-  }, [user, db, toast]);
+  }, [user, toast]);
 
   const handleInitiateDeleteArticle = (article: Article) => {
     setArticleToDelete(article);
@@ -195,7 +194,7 @@ export default function LibraryPage() {
       return;
     }
 
-    if (articleToDelete.id.startsWith('local-')) { // Handle local delete
+    if (articleToDelete.id.startsWith('local-')) { 
         setArticles(prev => prev.filter(a => a.id !== articleToDelete.id));
         toast({
             title: "Local Article Deleted",
@@ -204,7 +203,8 @@ export default function LibraryPage() {
         setArticleToDelete(null);
         return;
     }
-
+    
+    const db = getFirebaseFirestore(); // Get db instance
     if (!db || !user) {
          toast({ title: "Error", description: "Could not delete article. User or database not available.", variant: "destructive" });
         return;
@@ -225,7 +225,7 @@ export default function LibraryPage() {
     }
   };
 
-  const displayArticles = articles; // Always display from local state, which is updated by Firebase or local actions
+  const displayArticles = articles;
 
   return (
     <main className="flex flex-1 flex-col">
@@ -233,7 +233,7 @@ export default function LibraryPage() {
       <div className="flex-1 overflow-auto">
         {authLoading || (isLoadingArticles && user) ? (
           <div className="text-center py-12 text-muted-foreground">Loading articles...</div>
-        ) : !user && !authLoading && displayArticles.length === 0 ? ( // Only show "Please log in" if also no local articles
+        ) : !user && !authLoading && displayArticles.length === 0 ? ( 
           <div className="text-center py-12">
             <h2 className="text-2xl font-headline mb-2">Welcome to Your Personal Archive</h2>
             <p className="text-muted-foreground">Please log in to manage and view your articles, or add content to view it in this session.</p>
@@ -256,7 +256,7 @@ export default function LibraryPage() {
         onOpenChange={setIsAddContentDialogOpen}
         onAddArticle={handleAddArticle}
         onAddRssFeed={handleAddRssFeed}
-        isUserLoggedIn={!!user} // Still pass this for dialog's internal descriptive text
+        isUserLoggedIn={!!user} 
       />
       {articleToDelete && (
         <AlertDialog open={!!articleToDelete} onOpenChange={() => setArticleToDelete(null)}>

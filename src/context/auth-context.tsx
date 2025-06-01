@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { auth, googleAuthProvider } from '@/lib/firebase'; // auth can be null
+import { getFirebaseAuth, googleAuthProvider } from '@/lib/firebase'; // Use getter
 import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
@@ -22,8 +22,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
 
   useEffect(() => {
+    const auth = getFirebaseAuth(); // Get auth instance
     if (!auth) {
-      console.warn("Firebase Auth is not initialized. Skipping AuthProvider setup.");
+      // This case is handled by getFirebaseAuth logging or initial firebase.ts warning
+      // console.warn("Firebase Auth is not initialized. Skipping AuthProvider setup.");
       setLoading(false);
       setUser(null);
       return;
@@ -37,6 +39,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signInWithGoogle = async () => {
+    const auth = getFirebaseAuth(); // Get auth instance
     if (!auth) {
       toast({
         title: 'Configuration Error',
@@ -56,13 +59,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error("Error signing in with Google: ", error);
       let errorMessage = 'Could not sign in with Google. Please try again.';
-      // Basic error check, specific Firebase error codes can be checked if needed
       if (error instanceof Error) {
         if ('code' in error && typeof error.code === 'string') {
             if (error.code === 'auth/popup-closed-by-user') {
                 errorMessage = 'Sign-in popup closed before completion.';
             } else if (error.code === 'auth/cancelled-popup-request') {
                 errorMessage = 'Sign-in popup request cancelled.';
+            } else if (error.code === 'auth/web-storage-unsupported' || error.message.includes('Access to storage is not allowed')) {
+                errorMessage = 'Browser storage is unavailable or disallowed. Please check your browser settings (e.g., third-party cookies, iframe restrictions).';
             }
         }
       }
@@ -77,6 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signOutUser = async () => {
+    const auth = getFirebaseAuth(); // Get auth instance
     if (!auth) {
        toast({
         title: 'Configuration Error',
