@@ -1,5 +1,6 @@
+
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, type Auth, initializeAuth, inMemoryPersistence } from 'firebase/auth';
+import { getAuth, type Auth, initializeAuth, inMemoryPersistence } from 'firebase/auth';
 import { getFirestore, type Firestore, initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 
 const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
@@ -12,7 +13,7 @@ const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
 let app: FirebaseApp | null = null;
 let authInstance: Auth | null = null;
 let dbInstance: Firestore | null = null;
-const googleAuthProvider = new GoogleAuthProvider();
+// Removed: const googleAuthProvider = new GoogleAuthProvider();
 
 if (apiKey && authDomain && projectId && appId) {
   const firebaseConfig = {
@@ -79,5 +80,6 @@ export function getFirebaseFirestore(): Firestore | null {
   return dbInstance;
 }
 
-// Export app and googleAuthProvider directly as they don't have the same lazy-init needs for storage.
-export { app, googleAuthProvider };
+// Export app directly as it doesn't have the same lazy-init needs for storage.
+// Removed googleAuthProvider from export
+export { app };
