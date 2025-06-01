@@ -48,7 +48,7 @@ interface AddContentDialogProps {
   onOpenChange: (isOpen: boolean) => void;
   onAddArticle: (article: Partial<Article>) => void;
   onAddRssFeed: (feed: Partial<RssFeed>) => void;
-  isUserLoggedIn: boolean; // Used for descriptive text
+  isUserLoggedIn: boolean;
 }
 
 export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssFeed, isUserLoggedIn }: AddContentDialogProps) {
@@ -71,13 +71,14 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
   });
 
   const handleAddUrl = async (values: z.infer<typeof urlFormSchema>) => {
+    // The onAddArticle callback (from page.tsx) will now handle the !isUserLoggedIn case with a toast
     setIsExtractingInfo(true);
     
     let extractedInfo: ExtractArticleInfoOutput = {
         title: values.url,
         summary: 'Extracting information...',
-        imageUrl: undefined,
-        dataAiHint: undefined,
+        imageUrl: null, // Ensure it's null not undefined
+        dataAiHint: "content hint", // Ensure it's a string
     };
     let sourceName;
 
@@ -111,7 +112,7 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
       console.error("Failed to extract article info:", error);
       extractedInfo.title = values.url; 
       extractedInfo.summary = "Error extracting content. Please check the URL or try again.";
-      extractedInfo.imageUrl = undefined;
+      extractedInfo.imageUrl = null;
       extractedInfo.dataAiHint = "extraction error";
       toast({
         title: "AI Extraction Error",
@@ -128,23 +129,24 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
       summary: extractedInfo.summary,
       sourceName: sourceName,
       tags: [], 
-      imageUrl: extractedInfo.imageUrl || undefined,
+      imageUrl: extractedInfo.imageUrl || undefined, // Use undefined if null for proper fallback
       dataAiHint: extractedInfo.dataAiHint || undefined,
     };
-    onAddArticle(newArticle); // This will be handled by page.tsx's logic for local vs. DB add
+    onAddArticle(newArticle);
     urlForm.reset();
-    onOpenChange(false);
+    // onOpenChange(false) will be handled by onAddArticle if successful or login required
   };
 
   const handleAddRss = (values: z.infer<typeof rssFormSchema>) => {
+    // onAddRssFeed will be called, page.tsx might choose to show a login toast if needed for RSS persistence
     const newRssFeed: Partial<RssFeed> = {
       url: values.rssUrl,
       name: values.name,
       lastFetched: new Date().toISOString(),
     };
-    onAddRssFeed(newRssFeed); // This will be handled by page.tsx's logic
+    onAddRssFeed(newRssFeed);
     rssForm.reset();
-    onOpenChange(false);
+    // onOpenChange(false); // Let onAddRssFeed handle this if it needs to
   };
 
   return (
@@ -159,8 +161,8 @@ export function AddContentDialog({ isOpen, onOpenChange, onAddArticle, onAddRssF
         <DialogHeader>
           <DialogTitle className="font-headline">Add New Content</DialogTitle>
           <DialogDescription>
-            Add a URL or an RSS feed to your personal archive. 
-            {!isUserLoggedIn && " Articles added without login will be available for this session only."}
+            Add a URL to save an article to your archive, or an RSS feed to follow.
+            {!isUserLoggedIn && " Please note: Articles can only be saved if you are logged in."}
           </DialogDescription>
         </DialogHeader>
         
