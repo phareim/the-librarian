@@ -29,16 +29,18 @@ if (apiKey && authDomain && projectId && appId) {
   if (!getApps().length) {
     try {
       app = initializeApp(firebaseConfig);
+      console.log(`✅ Firebase initialized for project: ${projectId}`);
     } catch (error) {
-      console.error("Firebase initialization error:", error);
+      console.error("❌ Firebase initialization error:", error);
       app = null; // Ensure app is null if initialization fails
     }
   } else {
     app = getApp();
+    console.log(`✅ Firebase app already initialized: ${projectId}`);
   }
 } else {
   console.warn(
-    "Firebase configuration is missing or incomplete. " +
+    "⚠️ Firebase configuration is missing or incomplete. " +
     "Please ensure NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, " +
     "NEXT_PUBLIC_FIREBASE_PROJECT_ID, and NEXT_PUBLIC_FIREBASE_APP_ID are set in your .env.local file. " +
     "Firebase features will be disabled."
@@ -63,14 +65,18 @@ export function getFirebaseAuth(): Auth | null {
 
 export function getFirebaseFirestore(): Firestore | null {
   if (!app) {
+    console.warn('⚠️ Cannot get Firestore: Firebase app not initialized');
     return null;
   }
   if (!dbInstance) {
     try {
       // Use getFirestore(app) instead of initializeFirestore with specific cache
       dbInstance = getFirestore(app);
+      console.log('✅ Firestore instance created successfully');
     } catch (error) {
-      console.error("Error getting Firebase Firestore instance:", error);
+      console.error("❌ Error getting Firebase Firestore instance:", error);
+      console.error('   Make sure Firestore database is created in Firebase Console:');
+      console.error(`   https://console.firebase.google.com/project/${app.options.projectId}/firestore`);
       dbInstance = null; // Ensure instance is null on error
     }
   }
