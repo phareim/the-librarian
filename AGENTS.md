@@ -89,11 +89,10 @@ if (!db || !user) {
 - `dataAiHint` (string) - Keywords for placeholder images
 - `aiRelevance` (object | null) - `{ score: number, reasoning: string, isLoading?: boolean }`
 
-**Important**: When saving to Firestore:
-- Use `serverTimestamp()` for `dateAdded` on new articles
-- Convert `aiRelevance.isLoading` (UI state) to exclude from database writes
-- Convert Date objects when updating `dateAdded`
-- Ensure `content` and `sourceName` use `?? null` to avoid undefined values
+**Writing to Firestore** (`handleAddArticle` for new articles, `handleUpdateArticle` for edits, both in `src/app/page.tsx`):
+- `dateAdded`: `serverTimestamp()` on new articles; on update, parsed from a string or `Timestamp` and normalized to a `Date`, falling back to `new Date()` when missing or unparseable
+- `aiRelevance`: only `{ score, reasoning }` is written — `isLoading` (UI-only state) is stripped
+- `content` and `sourceName` are string or `null`, never undefined (`?? null`)
 
 ### AI Flows (Server Actions)
 
@@ -134,17 +133,6 @@ Genkit configuration is in `src/ai/genkit.ts` using model `googleai/gemini-2.0-f
 
 ## Development Notes
 
-### When Adding Articles to Firestore
-
-The codebase has evolved to handle edge cases around article creation. When adding articles:
-
-1. Always use `serverTimestamp()` for `dateAdded` field
-2. If `dateAdded` is missing/undefined, fallback to `new Date().toISOString()`
-3. Remove `aiRelevance.isLoading` before saving (it's UI-only state)
-4. Validate that `content` and `sourceName` are either string or null (not undefined)
-
-See `handleAddArticle` in `src/app/page.tsx` for the canonical pattern.
-
 ### Firebase Error Handling
 
 All Firestore operations include try-catch with detailed error messages:
@@ -172,11 +160,3 @@ Required environment variables in `.env.local`:
 - Google AI API key for Genkit (check Genkit documentation for variable name)
 
 The app will run with warnings if Firebase config is missing, but features will be disabled.
-
-## Recent Bug Fixes
-
-Based on git history, recent issues that were resolved:
-- Articles weren't being saved to Firebase (now fixed with proper Firestore integration)
-- `dateAdded` field was undefined causing FirebaseError (now uses `serverTimestamp()` with fallback)
-- Login functionality was broken (restored with proper auth context implementation)
-- Removed unnecessary localStorage article storage code when user is not logged in
